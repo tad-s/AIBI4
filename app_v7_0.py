@@ -1112,7 +1112,7 @@ def _render_initial_figs_for_export(df: pd.DataFrame) -> list[tuple[str, io.Byte
         if g.get("source") != "initial":
             continue
         plt.close("all")
-        safe_globals = {"pd": pd, "np": np, "plt": plt, "df": df}
+        safe_globals = {"pd": pd, "np": np, "plt": plt, "matplotlib": matplotlib, "df": df}
         safe_locals = {}
         try:
             cleaned = sanitize_code(g["code"])
@@ -1845,6 +1845,9 @@ def sanitize_code(code: str) -> str:
         stripped = line.strip()
         if stripped.startswith("import ") or stripped.startswith("from "):
             continue
+        # LLMがフォントを上書きする行を除去（文字化け防止）
+        if "rcParams" in stripped and "font" in stripped:
+            continue
         cleaned_lines.append(line)
     code = "\n".join(cleaned_lines)
     # pandas 2.0+ で廃止された .append() を pd.concat() に自動変換
@@ -1853,7 +1856,9 @@ def sanitize_code(code: str) -> str:
         r'pd.concat([\1, \2], ignore_index=True)',
         code,
     )
-    return code
+    # 先頭に日本語フォント強制設定を挿入（Streamlit Cloud / Linux 対応）
+    font_fix = "plt.rcParams['font.family'] = 'IPAexGothic'\nplt.rcParams['axes.unicode_minus'] = False\n"
+    return font_fix + code
 
 
 def _fig_has_visible_content(fig) -> bool:
@@ -1883,7 +1888,7 @@ def render_graph(graph: dict, df: pd.DataFrame):
     code = graph["code"]
     st.markdown(f"**📈 グラフ{gid}：{label}**")
     plt.close("all")
-    safe_globals = {"pd": pd, "np": np, "plt": plt, "df": df}
+    safe_globals = {"pd": pd, "np": np, "plt": plt, "matplotlib": matplotlib, "df": df}
     safe_locals = {}
     try:
         cleaned = sanitize_code(code)
