@@ -32,6 +32,15 @@ data/ハンバーガーショップデータ/
 .DS_Store
 Thumbs.db
 
+# Claude Code 内部ディレクトリ
+.agent/
+.agents/
+.claude/
+
+# バックアップ・テストファイル
+*.bak
+test_*.py
+
 # 旧バージョンのアプリファイル（不要）
 app.py
 app_v2.py

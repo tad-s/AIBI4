@@ -23,8 +23,11 @@ import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# ── Streamlit Cloud シークレット → 環境変数へ橋渡し（ローカルでは .env が優先） ──
-load_dotenv()
+# ── .env を明示的パスで最優先ロード ──
+# load_dotenv() 引数なしは cwd 依存で不安定なため、__file__ 基準の絶対パスを使用
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env", override=False)
+
+# ── Streamlit Cloud シークレット → 環境変数へ橋渡し（.env で未設定のキーのみ補完） ──
 try:
     import streamlit as _st_secrets
     for _secret_key in ["SUPABASE_URL", "SUPABASE_KEY", "OPENAI_API_KEY"]:
