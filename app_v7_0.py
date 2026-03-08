@@ -1616,11 +1616,15 @@ def load_external_signals_csv(uploaded_file) -> pd.DataFrame | None:
 
 SHOW_HISTORY_DASHBOARD = False
 
-try:
-    import japanize_matplotlib  # noqa: F401  Streamlit Cloud / Linux 向け日本語フォント設定
-except ImportError:
-    # ローカル Windows 環境のフォールバック
-    for _font in ["Meiryo", "Yu Gothic", "MS Gothic"]:
+# 日本語フォント設定
+# Streamlit Cloud (Linux): packages.txt で fonts-noto-cjk をインストール → "Noto Sans CJK JP"
+# ローカル Windows: Meiryo / Yu Gothic にフォールバック
+import matplotlib.font_manager as _fm
+_fm.fontManager.__init__()  # フォントキャッシュを再構築してシステムフォントを認識させる
+_FONT_CANDIDATES = ["Noto Sans CJK JP", "IPAexGothic", "IPAGothic", "Meiryo", "Yu Gothic", "MS Gothic"]
+_available_fonts = {f.name for f in _fm.fontManager.ttflist}
+for _font in _FONT_CANDIDATES:
+    if _font in _available_fonts:
         matplotlib.rcParams["font.family"] = _font
         break
 matplotlib.rcParams["axes.unicode_minus"] = False
@@ -1856,8 +1860,14 @@ def sanitize_code(code: str) -> str:
         r'pd.concat([\1, \2], ignore_index=True)',
         code,
     )
-    # 先頭に日本語フォント強制設定を挿入（Streamlit Cloud / Linux 対応）
-    font_fix = "plt.rcParams['font.family'] = 'IPAexGothic'\nplt.rcParams['axes.unicode_minus'] = False\n"
+    # 先頭に日本語フォント強制設定を挿入（import行はサニタイズ後に追加するため除去されない）
+    # matplotlib / font_manager は safe_globals 経由で利用可能
+    font_fix = (
+        "_avail_ = {f.name for f in matplotlib.font_manager.fontManager.ttflist}\n"
+        "_font_ = next((f for f in ['Noto Sans CJK JP','IPAexGothic','IPAGothic','Meiryo','Yu Gothic'] if f in _avail_), None)\n"
+        "if _font_: plt.rcParams['font.family'] = _font_\n"
+        "plt.rcParams['axes.unicode_minus'] = False\n"
+    )
     return font_fix + code
 
 
