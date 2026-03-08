@@ -1872,12 +1872,10 @@ def sanitize_code(code: str) -> str:
         r'pd.concat([\1, \2], ignore_index=True)',
         code,
     )
-    # 先頭に日本語フォント強制設定を挿入（import行はサニタイズ後に追加するため除去されない）
-    # matplotlib / font_manager は safe_globals 経由で利用可能
+    # 先頭に日本語フォント強制設定を挿入
+    # Streamlit Cloud: packages.txt で Noto Sans CJK JP がインストール済み
     font_fix = (
-        "_avail_ = {f.name for f in matplotlib.font_manager.fontManager.ttflist}\n"
-        "_font_ = next((f for f in ['Noto Sans CJK JP','IPAexGothic','IPAGothic','Meiryo','Yu Gothic'] if f in _avail_), None)\n"
-        "if _font_: plt.rcParams['font.family'] = _font_\n"
+        "plt.rcParams['font.family'] = 'Noto Sans CJK JP'\n"
         "plt.rcParams['axes.unicode_minus'] = False\n"
     )
     return font_fix + code
