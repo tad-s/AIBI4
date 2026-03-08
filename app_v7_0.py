@@ -1616,7 +1616,13 @@ def load_external_signals_csv(uploaded_file) -> pd.DataFrame | None:
 
 SHOW_HISTORY_DASHBOARD = False
 
-matplotlib.rcParams["font.family"] = "Meiryo"
+try:
+    import japanize_matplotlib  # noqa: F401  Streamlit Cloud / Linux 向け日本語フォント設定
+except ImportError:
+    # ローカル Windows 環境のフォールバック
+    for _font in ["Meiryo", "Yu Gothic", "MS Gothic"]:
+        matplotlib.rcParams["font.family"] = _font
+        break
 matplotlib.rcParams["axes.unicode_minus"] = False
 
 BASE_DIR = Path(__file__).resolve().parent
