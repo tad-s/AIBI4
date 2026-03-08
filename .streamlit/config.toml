@@ -3,3 +3,6 @@ maxUploadSize = 50
 
 [theme]
 base = "dark"
+
+[client]
+toolbarMode = "minimal"
