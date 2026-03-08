@@ -30,7 +30,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "https://yixsaqvjekygmnthgvaq.supabase.
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 # 1 回の RPC 呼び出しがカバーする日数（短いほどタイムアウトしにくい）
-CHUNK_DAYS = 30  # タイムアウト解消後は 30（月単位）でOK。問題が続く場合は 7 や 3 に下げる
+CHUNK_DAYS = 7   # 週単位で分割（2024-09 など大量月のタイムアウト対策）
 
 # PostgREST のデフォルト最大行数（超過すると自動的に打ち切られる）
 # .range() を使ってページネーションを行い全件取得する
