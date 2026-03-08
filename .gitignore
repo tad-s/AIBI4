@@ -1,0 +1,67 @@
+# 環境変数・シークレット
+.env
+.env.*
+.streamlit/secrets.toml
+
+# Python 仮想環境
+env/
+venv/
+.venv/
+
+# キャッシュ・コンパイル済みファイル
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ローカルDB
+profile.db
+
+# 生成済みキャッシュ（クラウドでは再生成するため除外）
+data/summary_cache.json
+
+# データファイル（大容量・機密）
+data/*.csv
+data/ダミーデータ/
+data/ハンバーガーショップデータ/
+
+# Excel
+*.xlsx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 旧バージョンのアプリファイル（不要）
+app.py
+app_v2.py
+app_v3.py
+app_v4.py
+app_v4_1.py
+app_v4_2.py
+app_v4_3.py
+app_v5_1.py
+app_v5_2.py
+app_v5_2.py.bak
+app_v5_3.py
+app_v5_4.py
+app_v5_5.py
+app_v6.py
+app_v6_2CC版.py
+app_v6_2GPT版.py
+app_v6_3.py
+app_v6_3_final.py
+app_v6_3_fixed.py
+app_v6_4.py
+app_v6_4_back.py
+app_v6_5.py
+app_v6_6.py
+app_v6_7.py
+app_v6_8.py
+app_v6_9.py
+fetch_202409.py
+fetch_202409_remainder.py
+fetch_all_data.py
+skills-lock.json
+ベース環境構築メモ.txt
+oesデータ確認.xlsx
