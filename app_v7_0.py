@@ -41,13 +41,6 @@ try:
 except ImportError:
     OPENPYXL_AVAILABLE = False
 
-from profile_db import (
-    init_db,
-    save_master,
-    load_master,
-    build_profile_summary,
-)
-
 # Supabase ローダー
 try:
     from supabase_loader import get_client as get_supabase_client
@@ -1638,8 +1631,6 @@ st.set_page_config(page_title="LLM BI アシスタント", layout="wide")
 st.title("LLM BI アシスタント")
 st.caption("v7.0")
 
-init_db()
-
 # ── セッション状態初期化 ──
 for key, default in [
     ("df", None), ("summary_text", None), ("chat_history", []),
@@ -1927,50 +1918,6 @@ def render_graphs_grid(graphs: list, df: pd.DataFrame, cols_per_row: int = 3):
                 render_graph(graph, df)
 
 
-def build_auto_annotation(user_text: str) -> str:
-    annotations: list[str] = []
-    df_store = load_master("stores")
-    if df_store is not None and not df_store.empty:
-        store_name_col = next(
-            (c for c in ["name", "店舗名", "store_name"] if c in df_store.columns), None
-        )
-        if store_name_col:
-            names = df_store[store_name_col].dropna().astype(str).unique().tolist()
-            hits: list[str] = [n for n in names if n and n in user_text]
-            close = get_close_matches(user_text, names, n=3, cutoff=0.8)
-            for name in close:
-                if name not in hits:
-                    hits.append(name)
-            for name in hits:
-                row = df_store[df_store[store_name_col] == name].iloc[0]
-                annotations.append(
-                    f"[AUTO_ANNOTATION] 店舗候補: '{name}' "
-                    f"(shop_code={row.get('shop_code', '')}, city='{row.get('city', '')}')"
-                )
-    df_prod = load_master("products")
-    if df_prod is not None and not df_prod.empty:
-        prod_name_col = next(
-            (c for c in ["product_name", "name", "商品名"] if c in df_prod.columns), None
-        )
-        prod_code_col = next(
-            (c for c in ["product_code", "商品コード"] if c in df_prod.columns), None
-        )
-        if prod_name_col:
-            names = df_prod[prod_name_col].dropna().astype(str).unique().tolist()
-            hits = [n for n in names if n and n in user_text]
-            close = get_close_matches(user_text, names, n=3, cutoff=0.8)
-            for name in close:
-                if name not in hits:
-                    hits.append(name)
-            for name in hits:
-                row = df_prod[df_prod[prod_name_col] == name].iloc[0]
-                code_val = row.get(prod_code_col, "") if prod_code_col else ""
-                annotations.append(
-                    f"[AUTO_ANNOTATION] 商品候補: '{name}' "
-                    f"(product_code={code_val}, category='{row.get('category', '')}')"
-                )
-    return "\n".join(annotations)
-
 
 _GRAPH_QUALITY_RULES = (
     "【グラフ品質ルール（必須）】\n"
@@ -2106,12 +2053,31 @@ def fetch_weather_daily(lat: float, lon: float, start: date, end: date) -> pd.Da
 # ===== サマリーキャッシュ ヘルパー =====
 # ============================================================
 
-_SUMMARY_CACHE_FILE = BASE_DIR / "data" / "summary_cache.json"
 _TIMEBAND_ORDER = ["〜17時(昼)", "17〜20時(夕方)", "20〜23時(夜)", "23時〜(深夜)"]
 
 
+def _load_summary_cache_from_db() -> dict:
+    """Supabase の summary_cache テーブルからキャッシュを読み込む。失敗時は空dictを返す。"""
+    if not SUPABASE_AVAILABLE:
+        return {}
+    try:
+        _sb = get_supabase_client()
+        res = _sb.table("summary_cache").select("*").eq("id", 1).execute()
+        if res.data:
+            row = res.data[0]
+            return {
+                "generated_at":  row.get("generated_at", "不明"),
+                "total_visits":  row.get("total_visits", 0),
+                "store_month":   row.get("store_month", []),
+                "store_timeband": row.get("store_timeband", []),
+            }
+    except Exception:
+        pass
+    return {}
+
+
 def _rebuild_summary_cache() -> dict:
-    """Supabase の visits テーブルからキャッシュを再生成し JSON を保存する。"""
+    """visits テーブルからキャッシュを再集計し Supabase の summary_cache テーブルに保存する。"""
     from datetime import datetime as _dt
 
     if not SUPABASE_AVAILABLE:
@@ -2143,7 +2109,7 @@ def _rebuild_summary_cache() -> dict:
     df["time_band"] = df["hour"].apply(_to_band)
     df = df.dropna(subset=["month"])
 
-    # 未来月・明らかに異常な日付を除外（当月より後は集計対象外）
+    # 未来月・異常日付を除外
     _today_month = pd.Timestamp.now(tz="Asia/Tokyo").strftime("%Y-%m")
     _before = len(df)
     df = df[df["month"] <= _today_month]
@@ -2164,40 +2130,40 @@ def _rebuild_summary_cache() -> dict:
 
     cache = {
         "generated_at":  _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "data_source":   "supabase",
         "total_visits":  int(len(df)),
         "store_month":   store_month.to_dict(orient="records"),
         "store_timeband": store_timeband.to_dict(orient="records"),
     }
-    _SUMMARY_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _SUMMARY_CACHE_FILE.write_text(
-        json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+
+    # Supabase に upsert（id=1 の行を常に上書き）
+    try:
+        _sb.table("summary_cache").upsert({
+            "id":            1,
+            "generated_at":  cache["generated_at"],
+            "total_visits":  cache["total_visits"],
+            "store_month":   cache["store_month"],
+            "store_timeband": cache["store_timeband"],
+        }).execute()
+    except Exception as e:
+        st.warning(f"キャッシュの保存に失敗しました（読み取りは可能です）: {e}")
+
     return cache
 
 
 def _show_summary_cache():
-    """キャッシュ JSON を読んでヒートマップ表示する。"""
+    """Supabase の summary_cache テーブルを読んでヒートマップ表示する。"""
     st.markdown("### 📊 データ概要サマリー（事前集計）")
 
-    # ── キャッシュ読み込み or 自動生成 ─────────────────────────────
-    cache: dict = {}
-    if _SUMMARY_CACHE_FILE.exists():
-        try:
-            cache = json.loads(_SUMMARY_CACHE_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            cache = {}
+    cache: dict = _load_summary_cache_from_db()
 
     col_info, col_btn = st.columns([4, 1])
     with col_info:
-        if cache:
-            src = cache.get("data_source", "csv")
-            src_label = "DB（visits テーブル）" if src == "supabase" else "ローカル CSV"
+        if cache and cache.get("generated_at", "未生成") != "未生成":
             total_v = cache.get("total_visits", "")
             total_str = f"  |  来店記録: {total_v:,}件" if isinstance(total_v, int) else ""
             st.caption(
                 f"生成日時: {cache.get('generated_at', '不明')}  |  "
-                f"データソース: {src_label}{total_str}"
+                f"データソース: DB（visits テーブル）{total_str}"
             )
         else:
             st.caption("キャッシュが未生成です。右の「🔄 再生成」ボタンを押してください（DBへ接続します）。")

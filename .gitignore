@@ -14,10 +14,10 @@ __pycache__/
 *.pyo
 *.pyd
 
-# ローカルDB
+# ローカルDB（不使用）
 profile.db
 
-# 生成済みキャッシュ（クラウドでは再生成するため除外）
+# 生成済みキャッシュ（Supabaseに移行済みのため除外）
 data/summary_cache.json
 
 # データファイル（大容量・機密）
