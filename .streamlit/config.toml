@@ -5,4 +5,4 @@ maxUploadSize = 50
 base = "dark"
 
 [client]
-toolbarMode = "minimal"
+toolbarMode = "viewer"

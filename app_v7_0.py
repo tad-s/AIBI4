@@ -1641,6 +1641,18 @@ client = OpenAI(api_key=api_key)
 MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4.1-mini-2025-04-14")
 
 st.set_page_config(page_title="LLM BI アシスタント", layout="wide")
+
+# Streamlit の管理UIを非表示（Manage App・ハンバーガーメニュー・フッター）
+st.markdown("""
+<style>
+[data-testid="stToolbar"]       { display: none !important; }
+[data-testid="manage-app-button"] { display: none !important; }
+#MainMenu                       { display: none !important; }
+footer                          { display: none !important; }
+header                          { display: none !important; }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("LLM BI アシスタント")
 st.caption("v7.0")
 
