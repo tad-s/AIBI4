@@ -22,6 +22,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 from supabase import create_client, Client
+from supabase.lib.client_options import ClientOptions
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -30,7 +31,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "https://yixsaqvjekygmnthgvaq.supabase.
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 # 1 回の RPC 呼び出しがカバーする日数（短いほどタイムアウトしにくい）
-CHUNK_DAYS = 7   # 週単位で分割（2024-09 など大量月のタイムアウト対策）
+CHUNK_DAYS = 3   # 3日単位で分割（大量月のタイムアウト対策）
 
 # PostgREST のデフォルト最大行数（超過すると自動的に打ち切られる）
 # .range() を使ってページネーションを行い全件取得する
@@ -63,7 +64,10 @@ def get_client() -> Client:
             "SUPABASE_URL または SUPABASE_KEY が設定されていません。"
             ".env ファイルを確認してください。"
         )
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+    return create_client(
+        SUPABASE_URL, SUPABASE_KEY,
+        options=ClientOptions(postgrest_client_timeout=120),
+    )
 
 
 # ──────────────────────────────────────────────

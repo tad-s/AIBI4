@@ -6,3 +6,4 @@ numpy==2.3.5
 matplotlib==3.10.7
 requests==2.32.5
 python-dotenv==1.2.1
+streamlit-mic-recorder==0.0.8
