@@ -22,7 +22,6 @@ from datetime import date, timedelta
 
 import pandas as pd
 from supabase import create_client, Client
-from supabase.lib.client_options import ClientOptions
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -64,10 +63,7 @@ def get_client() -> Client:
             "SUPABASE_URL または SUPABASE_KEY が設定されていません。"
             ".env ファイルを確認してください。"
         )
-    return create_client(
-        SUPABASE_URL, SUPABASE_KEY,
-        options=ClientOptions(postgrest_client_timeout=120),
-    )
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 # ──────────────────────────────────────────────
