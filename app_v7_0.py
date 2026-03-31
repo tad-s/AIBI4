@@ -2556,30 +2556,6 @@ st.markdown("---")
 # ── 分析指示チャット ──
 st.header("🧠 分析指示チャット（データ分析専用）")
 
-# 音声入力
-if MIC_AVAILABLE:
-    st.caption("🎤 マイクボタンを押して話しかけると、テキストに変換してチャット欄へ入力できます。")
-    _audio = mic_recorder(
-        start_prompt="🎤 音声入力",
-        stop_prompt="⏹ 入力停止",
-        just_once=True,
-        use_container_width=False,
-        key="voice_recorder",
-    )
-    if _audio and _audio.get("bytes"):
-        with st.spinner("音声をテキストに変換中..."):
-            try:
-                _audio_file = io.BytesIO(_audio["bytes"])
-                _audio_file.name = "audio.wav"
-                _transcript = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=_audio_file,
-                    language="ja",
-                )
-                st.session_state["chat_query"] = _transcript.text
-                st.rerun()
-            except Exception as _e:
-                st.warning(f"音声認識エラー: {_e}")
 
 chat_query = st.text_area(
     "上記と同じデータについて、追加で知りたいこと・試したい集計を自由に入力してください。",
