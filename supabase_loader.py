@@ -18,6 +18,7 @@ Supabase から居酒屋売上データを取得して分析用 pandas DataFrame
 
 import os
 import calendar
+import time
 from datetime import date, timedelta
 
 import pandas as pd
@@ -30,7 +31,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "https://yixsaqvjekygmnthgvaq.supabase.
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 # 1 回の RPC 呼び出しがカバーする日数（短いほどタイムアウトしにくい）
-CHUNK_DAYS = 3   # 3日単位で分割（大量月のタイムアウト対策）
+CHUNK_DAYS = 1   # 1日単位で分割（502タイムアウト対策）
 
 # PostgREST のデフォルト最大行数（超過すると自動的に打ち切られる）
 # .range() を使ってページネーションを行い全件取得する
@@ -181,21 +182,29 @@ def fetch_sales_data(
         # PostgREST のデフォルト 1000 行上限を回避するためページネーションで全件取得
         offset = 0
         while True:
-            try:
-                result = (
-                    client.rpc("get_izakaya_sales", params)
-                    .range(offset, offset + RPC_PAGE_SIZE - 1)
-                    .execute()
-                )
-            except Exception as e:
-                err_str = str(e)
-                if (
-                    "get_izakaya_sales" in err_str
-                    or "Could not find" in err_str
-                    or "42883" in err_str
-                ):
-                    raise RuntimeError(RPC_SETUP_MSG) from e
-                raise
+            last_exc = None
+            for _retry in range(3):  # 502等の一時エラーは最大3回リトライ
+                try:
+                    result = (
+                        client.rpc("get_izakaya_sales", params)
+                        .range(offset, offset + RPC_PAGE_SIZE - 1)
+                        .execute()
+                    )
+                    last_exc = None
+                    break
+                except Exception as e:
+                    err_str = str(e)
+                    if (
+                        "get_izakaya_sales" in err_str
+                        or "Could not find" in err_str
+                        or "42883" in err_str
+                    ):
+                        raise RuntimeError(RPC_SETUP_MSG) from e
+                    last_exc = e
+                    if _retry < 2:
+                        time.sleep(3)  # リトライ前に3秒待機
+            if last_exc is not None:
+                raise last_exc
 
             rows = result.data or []
             all_rows.extend(rows)
