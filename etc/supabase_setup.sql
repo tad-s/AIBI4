@@ -60,16 +60,32 @@ BEGIN
     SET LOCAL statement_timeout = '0';
 
     RETURN QUERY
-    -- CTE で重複除去: 同一来店・同一商品（name + qty + price）の最初の 1 行のみ保持
-    -- daily_weather は stores.location_id と JST 日付で LEFT JOIN（データなし → NULL）
-    WITH deduped AS (
-        SELECT DISTINCT ON (v.visit_id, oi.item_name_raw, oi.quantity, oi.unit_price)
-            v.receipt_no,
+    -- 【最適化版】visits を先にインデックスで絞り込み（MATERIALIZED）、
+    -- 絞り込んだ visit_id のみに orders/order_items を JOIN することで
+    -- 大量重複データがある月でも高速動作する。
+    WITH filtered_visits AS MATERIALIZED (
+        -- Step1: idx_visits_visit_time を使って対象期間の visits だけ取得（小集合）
+        SELECT v.visit_id,
+               v.receipt_no,
+               v.visit_time,
+               v.leave_time,
+               v.party_size::INTEGER AS party_size,
+               v.customer_layer,
+               v.store_id
+        FROM visits v
+        WHERE v.visit_time >= p_start_date::TIMESTAMPTZ
+          AND v.visit_time <  (p_end_date::DATE + INTERVAL '1 day')::TIMESTAMPTZ
+          AND (p_store_ids IS NULL OR v.store_id = ANY(p_store_ids))
+    ),
+    deduped AS (
+        -- Step2: 小集合に対して JOIN → DISTINCT ON（処理行数を劇的に削減）
+        SELECT DISTINCT ON (fv.visit_id, oi.item_name_raw, oi.quantity, oi.unit_price)
+            fv.receipt_no,
             o.order_time,
-            v.visit_time,
-            v.leave_time,
-            v.party_size::INTEGER       AS party_size,
-            v.customer_layer,
+            fv.visit_time,
+            fv.leave_time,
+            fv.party_size,
+            fv.customer_layer,
             s.store_name,
             s.shop_code,
             oi.item_name_raw,
@@ -81,18 +97,15 @@ BEGIN
             dw.precipitation_sum,
             dw.weathercode,
             dw.weather_label
-        FROM visits v
-        INNER JOIN stores       s  ON s.store_id    = v.store_id
-        INNER JOIN orders       o  ON o.visit_id    = v.visit_id
+        FROM filtered_visits fv
+        INNER JOIN stores       s  ON s.store_id    = fv.store_id
+        INNER JOIN orders       o  ON o.visit_id    = fv.visit_id
         INNER JOIN order_items  oi ON oi.order_id   = o.order_id
         LEFT  JOIN daily_weather dw
                ON  dw.location_id = s.location_id
-               AND dw.date = (v.visit_time AT TIME ZONE 'Asia/Tokyo')::DATE
-        WHERE v.visit_time >= p_start_date::TIMESTAMPTZ
-          AND v.visit_time <  (p_end_date::DATE + INTERVAL '1 day')::TIMESTAMPTZ
-          AND oi.line_type = 'M'
-          AND (p_store_ids IS NULL OR v.store_id = ANY(p_store_ids))
-        ORDER BY v.visit_id, oi.item_name_raw, oi.quantity, oi.unit_price, o.order_time
+               AND dw.date = (fv.visit_time AT TIME ZONE 'Asia/Tokyo')::DATE
+        WHERE oi.line_type = 'M'
+        ORDER BY fv.visit_id, oi.item_name_raw, oi.quantity, oi.unit_price, o.order_time
     )
     SELECT
         d.receipt_no,
