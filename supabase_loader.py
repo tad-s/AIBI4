@@ -33,7 +33,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 # 1 回の RPC 呼び出しがカバーする日数（短いほどタイムアウトしにくい）
 CHUNK_DAYS = 7   # 7日単位で分割（並列実行と組み合わせてタイムアウト対策）
-MAX_WORKERS = 5  # チャンク並列数（Supabase free tier 接続数を考慮）
+MAX_WORKERS = 2  # 並列数: Free Tier の接続プール上限（約10）を超えないよう抑制
 
 # PostgREST のデフォルト最大行数（超過すると自動的に打ち切られる）
 # .range() を使ってページネーションを行い全件取得する
@@ -189,7 +189,9 @@ def _fetch_chunk(chunk_start: str, chunk_end: str, store_ids: list[int] | None) 
                     raise RuntimeError(RPC_SETUP_MSG) from e
                 last_exc = e
                 if _retry < 2:
-                    time.sleep(2 ** (_retry + 1))  # 2秒 → 4秒
+                    # PGRST003（接続プール枯渇）は長めに待機して空きを待つ
+                    wait = 10 if "PGRST003" in err_str else 2 ** (_retry + 1)
+                    time.sleep(wait)
         if last_exc is not None:
             raise last_exc
 
