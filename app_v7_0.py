@@ -1871,6 +1871,13 @@ def sanitize_code(code: str) -> str:
         r'pd.concat([\1, \2], ignore_index=True)',
         code,
     )
+    # tick_params() の ha= は無効パラメータ → 除去（matplotlib 3.x の変更）
+    # 正しくは plt.xticks(ha=...) または set_xticklabels(ha=...) を使う
+    code = _re.sub(
+        r'(tick_params\([^)]*?),\s*ha\s*=\s*[\'"][^\'"]*[\'"]([^)]*?\))',
+        r'\1\2',
+        code,
+    )
     # 先頭に日本語フォント強制設定を挿入
     # Streamlit Cloud: packages.txt で Noto Sans CJK JP がインストール済み
     font_fix = (
