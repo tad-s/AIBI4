@@ -59,6 +59,7 @@ try:
         fetch_sales_data as sb_fetch_sales_data,
         fetch_visits_for_summary,
         months_to_date_range,
+        count_fetch_chunks,
     )
     SUPABASE_AVAILABLE = True
 except ImportError:
@@ -2338,16 +2339,30 @@ else:
             _all_dfs = []
             _error_months = []
 
+            # 全月のチャンク数を事前計算（追加クエリなし・純粋な日付計算）
+            _total_chunks = sum(
+                count_fetch_chunks(*months_to_date_range([m]))
+                for m in selected_months
+            )
+            _done_chunks = [0]  # リストで可変参照（クロージャ共有用）
+
             _progress_bar = st.progress(0, text="取得準備中...")
             _status_text  = st.empty()
 
             for _mi, _month in enumerate(selected_months):
                 _s, _e = months_to_date_range([_month])
 
-                _status_text.info(f"📡 {_month} のデータを取得中...")
-
                 def _cb(n, label=_month):
-                    _status_text.info(f"📡 {label}: 累計 {n:,} 件取得済み...")
+                    _done_chunks[0] += 1
+                    _pct = min(_done_chunks[0] / _total_chunks, 1.0)
+                    _progress_bar.progress(
+                        _pct,
+                        text=(
+                            f"📡 {label} — "
+                            f"{_done_chunks[0]}/{_total_chunks} チャンク完了 "
+                            f"({_pct*100:.0f}%) 累計 {n:,} 件"
+                        ),
+                    )
 
                 try:
                     _df_m = sb_fetch_sales_data(_sb, _s, _e, sb_store_ids, progress_callback=_cb)
@@ -2355,11 +2370,6 @@ else:
                         _all_dfs.append(_df_m)
                 except Exception as _ex:
                     _error_months.append(f"{_month}: {_ex}")
-
-                _progress_bar.progress(
-                    (_mi + 1) / len(selected_months),
-                    text=f"完了: {_mi + 1}/{len(selected_months)} 月"
-                )
 
             _progress_bar.empty()
             _status_text.empty()

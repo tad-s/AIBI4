@@ -59,6 +59,11 @@ def _week_ranges(start_date: str, end_date: str) -> list[tuple[str, str]]:
     return chunks
 
 
+def count_fetch_chunks(start_date: str, end_date: str) -> int:
+    """指定期間のチャンク数を返す（追加クエリなし・純粋な日付計算）。"""
+    return len(_week_ranges(start_date, end_date))
+
+
 def get_client() -> Client:
     """Supabase クライアントを生成して返す。"""
     if not SUPABASE_URL or not SUPABASE_KEY:
