@@ -2185,8 +2185,6 @@ def _rebuild_summary_cache() -> dict:
 
 def _show_summary_cache():
     """Supabase の summary_cache テーブルを読んでヒートマップ表示する。"""
-    st.markdown("### 📊 データ概要サマリー（事前集計）")
-
     cache: dict = _load_summary_cache_from_db()
 
     col_info, col_btn = st.columns([4, 1])
@@ -2260,7 +2258,8 @@ def _show_summary_cache():
 # ============================================================
 
 # ── データ概要サマリー ──────────────────────────────────────────────
-_show_summary_cache()
+with st.expander("📊 データ概要サマリー（事前集計）", expanded=False):
+    _show_summary_cache()
 
 st.divider()
 
@@ -2423,133 +2422,132 @@ if st.session_state.get("df") is not None:
     )
 
 # ── 天気データ管理 ──
-st.header("🌤 天気データの管理")
-
-# 天気付与状況をバッジ表示
-_df_weather_check = st.session_state.get("df")
-if _df_weather_check is not None and "temperature_2m_max" in _df_weather_check.columns:
-    _w_nn = _df_weather_check["temperature_2m_max"].notna().sum()
-    if _w_nn > 0:
-        st.success(f"✅ 天気データ付与済み（{_w_nn:,} 行に気温・降水量・天気区分が含まれています）")
-    else:
-        st.warning(
-            "天気列は存在しますが値がすべて NULL です。  \n"
-            "下の「daily_weather テーブルを更新」を実行してから売上データを再取得してください。"
-        )
-else:
-    st.info(
-        "💡 **天気データは売上データ取得時に自動付与されます。**  \n"
-        "`daily_weather` テーブルに対象期間のデータがあれば、各行に "
-        "`temperature_2m_max / min / mean`・`precipitation_sum`・`weather_label` が自動で追加されます。  \n"
-        "初回または新しい月を追加した際は、下の「一括更新」を実行してから売上データを再取得してください。"
-    )
-
-# --- daily_weather 一括更新 ---
-with st.expander("🔄 daily_weather テーブルを更新する（新しい月を追加した時など）", expanded=False):
-    st.markdown(
-        "Open-Meteo から **全店舗分** の天気データを取得し `daily_weather` テーブルに保存します。  \n"
-        "保存後は「DB からデータを取得」を再実行すると天気列が自動付与されます。"
-    )
-
-    # 日付範囲を売上データから自動推定
-    _w_default_start = "2024-09-01"
-    _w_default_end   = "2025-10-31"
-    if st.session_state.get("df") is not None:
-        _df_wd   = st.session_state["df"]
-        _dt_col_w = next((c for c in ["来店時間", "注文日時"] if c in _df_wd.columns), None)
-        if _dt_col_w:
-            _dt_w   = pd.to_datetime(_df_wd[_dt_col_w], errors="coerce", utc=True)
-            _valid_w = _dt_w.notna()
-            if _valid_w.any():
-                _jst_w = _dt_w.dt.tz_convert("Asia/Tokyo")
-                _w_default_start = _jst_w[_valid_w].min().strftime("%Y-%m-%d")
-                _w_default_end   = _jst_w[_valid_w].max().strftime("%Y-%m-%d")
-
-    _w_col1, _w_col2 = st.columns(2)
-    _w_start = _w_col1.text_input("開始日（YYYY-MM-DD）", value=_w_default_start, key="weather_batch_start")
-    _w_end   = _w_col2.text_input("終了日（YYYY-MM-DD）", value=_w_default_end,   key="weather_batch_end")
-    st.caption("DB の stores テーブルから緯度経度を取得して全店舗の天気データを一括更新します。")
-
-    if st.button("🔄 全店舗の天気データを DB に一括保存", key="weather_batch_update", type="primary"):
-        try:
-            from fetch_weather_for_stores import (
-                fetch_open_meteo,
-                upsert_location,
-                upsert_weather_rows,
-                update_store_location_id,
-                GRID_PRECISION,
+with st.expander("🌤 天気データの管理", expanded=False):
+    # 天気付与状況をバッジ表示
+    _df_weather_check = st.session_state.get("df")
+    if _df_weather_check is not None and "temperature_2m_max" in _df_weather_check.columns:
+        _w_nn = _df_weather_check["temperature_2m_max"].notna().sum()
+        if _w_nn > 0:
+            st.success(f"✅ 天気データ付与済み（{_w_nn:,} 行に気温・降水量・天気区分が含まれています）")
+        else:
+            st.warning(
+                "天気列は存在しますが値がすべて NULL です。  \n"
+                "下の「daily_weather テーブルを更新」を実行してから売上データを再取得してください。"
             )
-            _sb_w = get_supabase_client()
+    else:
+        st.info(
+            "💡 **天気データは売上データ取得時に自動付与されます。**  \n"
+            "`daily_weather` テーブルに対象期間のデータがあれば、各行に "
+            "`temperature_2m_max / min / mean`・`precipitation_sum`・`weather_label` が自動で追加されます。  \n"
+            "初回または新しい月を追加した際は、下の「一括更新」を実行してから売上データを再取得してください。"
+        )
 
-            # stores テーブルから緯度経度を取得（CSV 不要）
-            with st.spinner("DB の stores テーブルから店舗情報を取得中..."):
-                _stores_res = _sb_w.table("stores").select(
-                    "store_id,store_name,latitude,longitude"
-                ).execute()
-            _df_m = pd.DataFrame(_stores_res.data or [])
+    # --- daily_weather 一括更新 ---
+    with st.expander("🔄 daily_weather テーブルを更新する（新しい月を追加した時など）", expanded=False):
+        st.markdown(
+            "Open-Meteo から **全店舗分** の天気データを取得し `daily_weather` テーブルに保存します。  \n"
+            "保存後は「DB からデータを取得」を再実行すると天気列が自動付与されます。"
+        )
 
-            if _df_m.empty:
-                st.error("stores テーブルからデータを取得できませんでした。")
-            else:
-                _df_v = _df_m.dropna(subset=["latitude", "longitude"]).copy()
-                if _df_v.empty:
-                    st.error(
-                        "stores テーブルに緯度経度が設定されている店舗がありません。  \n"
-                        "先に `python geocode_stores.py` を実行して位置情報を登録してください。"
-                    )
+        # 日付範囲を売上データから自動推定
+        _w_default_start = "2024-09-01"
+        _w_default_end   = "2025-10-31"
+        if st.session_state.get("df") is not None:
+            _df_wd   = st.session_state["df"]
+            _dt_col_w = next((c for c in ["来店時間", "注文日時"] if c in _df_wd.columns), None)
+            if _dt_col_w:
+                _dt_w   = pd.to_datetime(_df_wd[_dt_col_w], errors="coerce", utc=True)
+                _valid_w = _dt_w.notna()
+                if _valid_w.any():
+                    _jst_w = _dt_w.dt.tz_convert("Asia/Tokyo")
+                    _w_default_start = _jst_w[_valid_w].min().strftime("%Y-%m-%d")
+                    _w_default_end   = _jst_w[_valid_w].max().strftime("%Y-%m-%d")
+
+        _w_col1, _w_col2 = st.columns(2)
+        _w_start = _w_col1.text_input("開始日（YYYY-MM-DD）", value=_w_default_start, key="weather_batch_start")
+        _w_end   = _w_col2.text_input("終了日（YYYY-MM-DD）", value=_w_default_end,   key="weather_batch_end")
+        st.caption("DB の stores テーブルから緯度経度を取得して全店舗の天気データを一括更新します。")
+
+        if st.button("🔄 全店舗の天気データを DB に一括保存", key="weather_batch_update", type="primary"):
+            try:
+                from fetch_weather_for_stores import (
+                    fetch_open_meteo,
+                    upsert_location,
+                    upsert_weather_rows,
+                    update_store_location_id,
+                    GRID_PRECISION,
+                )
+                _sb_w = get_supabase_client()
+
+                # stores テーブルから緯度経度を取得（CSV 不要）
+                with st.spinner("DB の stores テーブルから店舗情報を取得中..."):
+                    _stores_res = _sb_w.table("stores").select(
+                        "store_id,store_name,latitude,longitude"
+                    ).execute()
+                _df_m = pd.DataFrame(_stores_res.data or [])
+
+                if _df_m.empty:
+                    st.error("stores テーブルからデータを取得できませんでした。")
                 else:
-                    _df_v["lat_grid"] = _df_v["latitude"].apply(lambda v: round(float(v), GRID_PRECISION))
-                    _df_v["lon_grid"] = _df_v["longitude"].apply(lambda v: round(float(v), GRID_PRECISION))
-
-                    _loc_groups     = _df_v.groupby(["lat_grid", "lon_grid"])
-                    _unique_locs    = list(_loc_groups.groups.keys())
-                    st.info(f"対象: {len(_df_v)} 店舗 / ユニーク地点数: {len(_unique_locs)} 地点")
-                    _progress_bar   = st.progress(0)
-                    _status_text    = st.empty()
-                    _total_upserted = 0
-                    _failed_locs    = []
-
-                    for _wi, (_lat_g, _lon_g) in enumerate(_unique_locs):
-                        _grp   = _loc_groups.get_group((_lat_g, _lon_g))
-                        _names = _grp["store_name"].tolist()
-                        _status_text.text(
-                            f"[{_wi+1}/{len(_unique_locs)}] "
-                            f"({_lat_g:.2f}, {_lon_g:.2f})  {', '.join(_names[:2])} を処理中..."
-                        )
-
-                        _loc_id = upsert_location(_sb_w, _lat_g, _lon_g, ", ".join(_names[:3]))
-                        if _loc_id is None:
-                            _failed_locs.append(f"({_lat_g:.2f},{_lon_g:.2f})")
-                            _progress_bar.progress((_wi + 1) / len(_unique_locs))
-                            continue
-
-                        for _, _sr in _grp.iterrows():
-                            update_store_location_id(_sb_w, int(_sr["store_id"]), _loc_id)
-
-                        _df_wdata = fetch_open_meteo(_lat_g, _lon_g, _w_start, _w_end)
-                        if _df_wdata is None or _df_wdata.empty:
-                            _failed_locs.append(f"({_lat_g:.2f},{_lon_g:.2f})")
-                            _progress_bar.progress((_wi + 1) / len(_unique_locs))
-                            continue
-
-                        _n = upsert_weather_rows(_sb_w, _loc_id, _df_wdata)
-                        _total_upserted += _n
-                        _progress_bar.progress((_wi + 1) / len(_unique_locs))
-
-                    _status_text.empty()
-                    if _failed_locs:
-                        st.warning(
-                            f"⚠️ {len(_failed_locs)} 地点で取得失敗: {', '.join(_failed_locs)}  \n"
-                            f"成功: {_total_upserted:,} 行を DB に保存しました。"
+                    _df_v = _df_m.dropna(subset=["latitude", "longitude"]).copy()
+                    if _df_v.empty:
+                        st.error(
+                            "stores テーブルに緯度経度が設定されている店舗がありません。  \n"
+                            "先に `python geocode_stores.py` を実行して位置情報を登録してください。"
                         )
                     else:
-                        st.success(
-                            f"✅ 全 {len(_unique_locs)} 地点の天気データを DB に保存しました "
-                            f"（{_total_upserted:,} 行）  \n"
-                            "「DB からデータを取得」を再実行すると天気列が自動で付与されます。"
-                        )
-        except Exception as _we:
-            st.error(f"天気データ一括更新でエラーが発生しました: {_we}")
+                        _df_v["lat_grid"] = _df_v["latitude"].apply(lambda v: round(float(v), GRID_PRECISION))
+                        _df_v["lon_grid"] = _df_v["longitude"].apply(lambda v: round(float(v), GRID_PRECISION))
+
+                        _loc_groups     = _df_v.groupby(["lat_grid", "lon_grid"])
+                        _unique_locs    = list(_loc_groups.groups.keys())
+                        st.info(f"対象: {len(_df_v)} 店舗 / ユニーク地点数: {len(_unique_locs)} 地点")
+                        _progress_bar   = st.progress(0)
+                        _status_text    = st.empty()
+                        _total_upserted = 0
+                        _failed_locs    = []
+
+                        for _wi, (_lat_g, _lon_g) in enumerate(_unique_locs):
+                            _grp   = _loc_groups.get_group((_lat_g, _lon_g))
+                            _names = _grp["store_name"].tolist()
+                            _status_text.text(
+                                f"[{_wi+1}/{len(_unique_locs)}] "
+                                f"({_lat_g:.2f}, {_lon_g:.2f})  {', '.join(_names[:2])} を処理中..."
+                            )
+
+                            _loc_id = upsert_location(_sb_w, _lat_g, _lon_g, ", ".join(_names[:3]))
+                            if _loc_id is None:
+                                _failed_locs.append(f"({_lat_g:.2f},{_lon_g:.2f})")
+                                _progress_bar.progress((_wi + 1) / len(_unique_locs))
+                                continue
+
+                            for _, _sr in _grp.iterrows():
+                                update_store_location_id(_sb_w, int(_sr["store_id"]), _loc_id)
+
+                            _df_wdata = fetch_open_meteo(_lat_g, _lon_g, _w_start, _w_end)
+                            if _df_wdata is None or _df_wdata.empty:
+                                _failed_locs.append(f"({_lat_g:.2f},{_lon_g:.2f})")
+                                _progress_bar.progress((_wi + 1) / len(_unique_locs))
+                                continue
+
+                            _n = upsert_weather_rows(_sb_w, _loc_id, _df_wdata)
+                            _total_upserted += _n
+                            _progress_bar.progress((_wi + 1) / len(_unique_locs))
+
+                        _status_text.empty()
+                        if _failed_locs:
+                            st.warning(
+                                f"⚠️ {len(_failed_locs)} 地点で取得失敗: {', '.join(_failed_locs)}  \n"
+                                f"成功: {_total_upserted:,} 行を DB に保存しました。"
+                            )
+                        else:
+                            st.success(
+                                f"✅ 全 {len(_unique_locs)} 地点の天気データを DB に保存しました "
+                                f"（{_total_upserted:,} 行）  \n"
+                                "「DB からデータを取得」を再実行すると天気列が自動で付与されます。"
+                            )
+            except Exception as _we:
+                st.error(f"天気データ一括更新でエラーが発生しました: {_we}")
 
 st.markdown("---")
 
