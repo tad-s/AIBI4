@@ -32,8 +32,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "https://yixsaqvjekygmnthgvaq.supabase.
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 # 1 回の RPC 呼び出しがカバーする日数（短いほどタイムアウトしにくい）
-CHUNK_DAYS = 7   # 7日単位で分割（並列実行と組み合わせてタイムアウト対策）
-MAX_WORKERS = 2  # 並列数: Free Tier の接続プール上限（約10）を超えないよう抑制
+CHUNK_DAYS = 3   # 3日単位で分割（Streamlit WebSocket 60s 以内に収めるため小刻みに）
+MAX_WORKERS = 4  # 並列数: Free Tier 接続プール（~10）の範囲内で並列化を最大化
 
 # PostgREST のデフォルト最大行数（超過すると自動的に打ち切られる）
 # .range() を使ってページネーションを行い全件取得する
