@@ -20,6 +20,7 @@ import os
 import calendar
 import time
 from datetime import date, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 from supabase import create_client, Client
@@ -31,7 +32,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "https://yixsaqvjekygmnthgvaq.supabase.
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 # 1 回の RPC 呼び出しがカバーする日数（短いほどタイムアウトしにくい）
-CHUNK_DAYS = 1   # 1日単位で分割（502タイムアウト対策）
+CHUNK_DAYS = 7   # 7日単位で分割（並列実行と組み合わせてタイムアウト対策）
+MAX_WORKERS = 5  # チャンク並列数（Supabase free tier 接続数を考慮）
 
 # PostgREST のデフォルト最大行数（超過すると自動的に打ち切られる）
 # .range() を使ってページネーションを行い全件取得する
@@ -145,6 +147,56 @@ def fetch_available_months(client: Client) -> list[str]:
         return []
 
 
+def _fetch_chunk(chunk_start: str, chunk_end: str, store_ids: list[int] | None) -> list[dict]:
+    """
+    1チャンク分のデータを取得する（スレッドごとに独立したクライアントを使用）。
+    ThreadPoolExecutor から呼ばれるためスレッドセーフに設計。
+    """
+    # スレッドごとに独立したクライアントを生成（httpx は非スレッドセーフ）
+    _client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    params: dict = {
+        "p_start_date": chunk_start,
+        "p_end_date":   chunk_end,
+    }
+    if store_ids is not None:
+        params["p_store_ids"] = store_ids
+
+    rows: list[dict] = []
+    offset = 0
+    while True:
+        last_exc = None
+        for _retry in range(3):  # 502等の一時エラーは最大3回リトライ（指数バックオフ）
+            try:
+                result = (
+                    _client.rpc("get_izakaya_sales", params)
+                    .range(offset, offset + RPC_PAGE_SIZE - 1)
+                    .execute()
+                )
+                last_exc = None
+                break
+            except Exception as e:
+                err_str = str(e)
+                if (
+                    "get_izakaya_sales" in err_str
+                    or "Could not find" in err_str
+                    or "42883" in err_str
+                ):
+                    raise RuntimeError(RPC_SETUP_MSG) from e
+                last_exc = e
+                if _retry < 2:
+                    time.sleep(2 ** (_retry + 1))  # 2秒 → 4秒
+        if last_exc is not None:
+            raise last_exc
+
+        page_rows = result.data or []
+        rows.extend(page_rows)
+        if len(page_rows) < RPC_PAGE_SIZE:
+            break
+        offset += RPC_PAGE_SIZE
+
+    return rows
+
+
 def fetch_sales_data(
     client: Client,
     start_date: str,                    # "YYYY-MM-DD"
@@ -153,11 +205,11 @@ def fetch_sales_data(
     progress_callback=None,             # callback(fetched_rows: int) or None
 ) -> pd.DataFrame:
     """
-    指定期間の売上データを Supabase RPC 関数経由で取得し、分析用 DataFrame を返す。
+    指定期間の売上データを Supabase RPC 関数経由で並列取得し、分析用 DataFrame を返す。
 
     【仕組み】
-      get_izakaya_sales() RPC 関数を CHUNK_DAYS 日ごとに分割して呼び出す。
-      1 回の SQL が処理する行数を削減しタイムアウトを防ぐ。
+      CHUNK_DAYS 日ごとにチャンク分割し、MAX_WORKERS 本のスレッドで並列実行する。
+      例: 4か月（約18チャンク）→ 5並列で約4バッチ → 合計40秒程度に短縮。
 
       事前準備: etc/supabase_setup.sql を Supabase SQL Editor で実行してください。
 
@@ -171,50 +223,18 @@ def fetch_sales_data(
     chunks = _week_ranges(start_date, end_date)
     all_rows: list[dict] = []
 
-    for chunk_start, chunk_end in chunks:
-        params: dict = {
-            "p_start_date": chunk_start,
-            "p_end_date":   chunk_end,
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        # 全チャンクを並列サブミット
+        future_map = {
+            executor.submit(_fetch_chunk, cs, ce, store_ids): (cs, ce)
+            for cs, ce in chunks
         }
-        if store_ids is not None:
-            params["p_store_ids"] = store_ids
-
-        # PostgREST のデフォルト 1000 行上限を回避するためページネーションで全件取得
-        offset = 0
-        while True:
-            last_exc = None
-            for _retry in range(3):  # 502等の一時エラーは最大3回リトライ
-                try:
-                    result = (
-                        client.rpc("get_izakaya_sales", params)
-                        .range(offset, offset + RPC_PAGE_SIZE - 1)
-                        .execute()
-                    )
-                    last_exc = None
-                    break
-                except Exception as e:
-                    err_str = str(e)
-                    if (
-                        "get_izakaya_sales" in err_str
-                        or "Could not find" in err_str
-                        or "42883" in err_str
-                    ):
-                        raise RuntimeError(RPC_SETUP_MSG) from e
-                    last_exc = e
-                    if _retry < 2:
-                        time.sleep(3)  # リトライ前に3秒待機
-            if last_exc is not None:
-                raise last_exc
-
-            rows = result.data or []
-            all_rows.extend(rows)
-
-            if len(rows) < RPC_PAGE_SIZE:
-                break  # これ以上データなし
-            offset += RPC_PAGE_SIZE
-
-        if progress_callback:
-            progress_callback(len(all_rows))
+        # as_completed はメインスレッドで実行されるためStreamlit UIの更新が安全
+        for future in as_completed(future_map):
+            chunk_rows = future.result()  # 例外があればここで再送出
+            all_rows.extend(chunk_rows)
+            if progress_callback:
+                progress_callback(len(all_rows))
 
     if not all_rows:
         return pd.DataFrame()
