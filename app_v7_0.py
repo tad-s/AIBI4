@@ -59,11 +59,23 @@ try:
         fetch_sales_data as sb_fetch_sales_data,
         fetch_visits_for_summary,
         months_to_date_range,
-        count_fetch_chunks,
     )
     SUPABASE_AVAILABLE = True
 except ImportError:
     SUPABASE_AVAILABLE = False
+
+
+def count_fetch_chunks(start_date: str, end_date: str) -> int:
+    """指定期間のチャンク数を返す（純粋な日付計算・追加クエリなし）。"""
+    from datetime import date as _d, timedelta as _td
+    CHUNK = 7  # supabase_loader.CHUNK_DAYS と合わせる
+    s = _d.fromisoformat(start_date)
+    e = _d.fromisoformat(end_date)
+    count, cur = 0, s
+    while cur <= e:
+        cur = min(cur + _td(days=CHUNK - 1), e) + _td(days=1)
+        count += 1
+    return count
 
 # ── pandas 2.0 互換レイヤー: .append() を pd.concat() で復元 ──
 # LLM が生成するコードが古い .append() を使う場合に備えてモンキーパッチ
