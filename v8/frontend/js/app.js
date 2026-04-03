@@ -1,5 +1,5 @@
 /**
- * app.js — AIBI4 V8 メインアプリケーション
+ * app.js — AIBI4 V8.1 メインアプリ
  */
 import * as api from "./api.js";
 import { VoiceRecorder } from "./voice.js";
@@ -8,24 +8,36 @@ import { VoiceRecorder } from "./voice.js";
 let sessionId = null;
 let voiceRecorder = null;
 let isRecording = false;
+let selectedMonths = new Set();
+let selectedStoreIds = new Set();
+let allStores = [];
 
 // ── DOM ──
 const $ = id => document.getElementById(id);
-const monthSelect    = $("month-select");
-const storeSelect    = $("store-select");
-const fetchBtn       = $("fetch-btn");
-const progressArea   = $("progress-area");
-const progressFill   = $("progress-fill");
-const progressText   = $("progress-text");
-const analysisArea   = $("analysis-area");
-const chatSection    = $("chat-section");
-const chatMessages   = $("chat-messages");
-const chatInput      = $("chat-input");
-const chatSendBtn    = $("chat-send-btn");
-const clearChatBtn   = $("clear-chat-btn");
-const voiceBtn       = $("voice-btn");
-const chatGraphsArea = $("chat-graphs-area");
-const toastEl        = $("toast");
+const monthChips      = $("month-chips");
+const storeSearch     = $("store-search");
+const storeList       = $("store-list");
+const storePreview    = $("store-preview");
+const fetchBtn        = $("fetch-btn");
+const progressWrap    = $("progress-wrap");
+const progressFill    = $("progress-fill");
+const progressText    = $("progress-text");
+const sbStatus        = $("sb-status");
+const emptyState      = $("empty-state");
+const loadedState     = $("loaded-state");
+const infoRows        = $("info-rows");
+const infoMonths      = $("info-months");
+const infoStores      = $("info-stores");
+const kpiBar          = $("kpi-bar");
+const analysisGrid    = $("analysis-grid");
+const skeletonGrid    = $("skeleton-grid");
+const chatMsgs        = $("chat-msgs");
+const chatInput       = $("chat-input");
+const chatSendBtn     = $("chat-send-btn");
+const clearChatBtn    = $("clear-chat-btn");
+const voiceBtn        = $("voice-btn");
+const chatGraphsArea  = $("chat-graphs-area");
+const toastEl         = $("toast");
 
 // ── Toast ──
 let toastTimer;
@@ -33,41 +45,189 @@ function showToast(msg, type = "info") {
   toastEl.textContent = msg;
   toastEl.className = `show ${type}`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toastEl.className = ""; }, 3500);
+  toastTimer = setTimeout(() => { toastEl.className = ""; }, 4000);
 }
 
-// ── レンダリング: グラフカード ──
-function renderGraphCard(title, imageB64, insight, table) {
+// ── タブ切り替え ──
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    const target = tab.dataset.tab;
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t === tab));
+    document.querySelectorAll(".tab-panel").forEach(p => {
+      p.classList.toggle("active", p.id === `tab-${target}`);
+    });
+  });
+});
+
+// ── 月チップ ──
+function renderMonthChips(months) {
+  monthChips.innerHTML = "";
+  if (months.length === 0) {
+    monthChips.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">データなし</span>';
+    return;
+  }
+  months.forEach(m => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = m;
+    chip.title = m;
+    chip.addEventListener("click", () => {
+      if (selectedMonths.has(m)) {
+        selectedMonths.delete(m);
+        chip.classList.remove("selected");
+      } else {
+        selectedMonths.add(m);
+        chip.classList.add("selected");
+      }
+    });
+    monthChips.appendChild(chip);
+  });
+  // 直近2ヶ月をデフォルト選択
+  const recent = months.slice(-2);
+  monthChips.querySelectorAll(".chip").forEach(chip => {
+    if (recent.includes(chip.textContent)) {
+      chip.classList.add("selected");
+      selectedMonths.add(chip.textContent);
+    }
+  });
+}
+
+// ── 店舗リスト ──
+function renderStoreList(stores) {
+  allStores = stores;
+  _renderFilteredStores("");
+}
+
+function _renderFilteredStores(query) {
+  storeList.innerHTML = "";
+  const filtered = query
+    ? allStores.filter(s => s.store_name.includes(query))
+    : allStores;
+
+  // 全店舗オプション
+  const allItem = document.createElement("label");
+  allItem.className = "store-item" + (selectedStoreIds.size === 0 ? " checked" : "");
+  allItem.innerHTML = `<input type="checkbox" ${selectedStoreIds.size === 0 ? "checked" : ""}> 全店舗`;
+  allItem.querySelector("input").addEventListener("change", e => {
+    if (e.target.checked) {
+      selectedStoreIds.clear();
+      _updateStoreChecks();
+    }
+  });
+  storeList.appendChild(allItem);
+
+  filtered.forEach(s => {
+    const item = document.createElement("label");
+    item.className = "store-item" + (selectedStoreIds.has(s.store_id) ? " checked" : "");
+    item.innerHTML = `<input type="checkbox" ${selectedStoreIds.has(s.store_id) ? "checked" : ""}> ${s.store_name}`;
+    item.querySelector("input").addEventListener("change", e => {
+      if (e.target.checked) {
+        selectedStoreIds.add(s.store_id);
+      } else {
+        selectedStoreIds.delete(s.store_id);
+      }
+      _updateStoreChecks();
+    });
+    storeList.appendChild(item);
+  });
+  _updateStorePreview();
+}
+
+function _updateStoreChecks() {
+  // 全店舗チェックボックスを同期
+  const allCb = storeList.querySelector("input");
+  if (allCb) allCb.checked = selectedStoreIds.size === 0;
+  storeList.querySelectorAll(".store-item").forEach((item, i) => {
+    if (i === 0) {
+      item.classList.toggle("checked", selectedStoreIds.size === 0);
+    } else {
+      const s = allStores.find(s => item.textContent.includes(s.store_name));
+      if (s) item.classList.toggle("checked", selectedStoreIds.has(s.store_id));
+    }
+  });
+  _updateStorePreview();
+}
+
+function _updateStorePreview() {
+  if (selectedStoreIds.size === 0) {
+    storePreview.textContent = "全店舗が対象";
+  } else {
+    const names = [...selectedStoreIds]
+      .map(id => allStores.find(s => s.store_id === id)?.store_name ?? id)
+      .slice(0, 3);
+    const rest = selectedStoreIds.size > 3 ? ` 他${selectedStoreIds.size - 3}店` : "";
+    storePreview.textContent = names.join("、") + rest;
+  }
+}
+
+storeSearch.addEventListener("input", e => _renderFilteredStores(e.target.value));
+
+// ── スケルトンローダー ──
+function showSkeletons(n = 6) {
+  skeletonGrid.innerHTML = "";
+  for (let i = 0; i < n; i++) {
+    skeletonGrid.innerHTML += `
+      <div class="skeleton-card">
+        <div class="skeleton-header"></div>
+        <div class="skeleton-body"></div>
+        <div class="skeleton-footer"></div>
+      </div>`;
+  }
+  skeletonGrid.style.display = "grid";
+}
+
+// ── グラフカード ──
+function buildGraphCard(title, imageB64, insight, table) {
   const card = document.createElement("div");
   card.className = "graph-card";
 
+  // ヘッダー
   const header = document.createElement("div");
-  header.className = "graph-card-header";
-  header.textContent = title;
+  header.className = "graph-header";
+  // 分析番号を抽出 (例: "分析①" → "①")
+  const numMatch = title.match(/[①②③④⑤⑥]/);
+  if (numMatch) {
+    const badge = document.createElement("span");
+    badge.className = "analysis-num";
+    badge.textContent = numMatch[0];
+    header.appendChild(badge);
+  }
+  const titleSpan = document.createElement("span");
+  titleSpan.textContent = title.replace(/分析[①②③④⑤⑥]\s*/, "").replace(/※.*$/, "").trim();
+  header.appendChild(titleSpan);
+  if (title.includes("ダミー")) {
+    const badge = document.createElement("span");
+    badge.style.cssText = "margin-left:auto;font-size:9px;color:var(--warn);background:rgba(243,156,18,.1);border:1px solid rgba(243,156,18,.3);border-radius:3px;padding:1px 5px;";
+    badge.textContent = "参考イメージ";
+    header.appendChild(badge);
+  }
+  card.appendChild(header);
 
+  // グラフ画像
   const img = document.createElement("img");
   img.src = `data:image/png;base64,${imageB64}`;
   img.alt = title;
   img.loading = "lazy";
-
-  card.appendChild(header);
   card.appendChild(img);
 
+  // インサイト
   if (insight) {
     const ins = document.createElement("div");
-    ins.className = "graph-card-insight";
-    ins.innerHTML = insight.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    ins.className = "graph-insight";
+    ins.innerHTML = "💡 " + insight.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     card.appendChild(ins);
   }
 
+  // テーブル（折りたたみ）
   if (table && table.length > 0) {
     const det = document.createElement("details");
     const sum = document.createElement("summary");
-    sum.textContent = "📋 データテーブル";
+    sum.textContent = `📋 集計データ（${table.length}行）`;
     det.appendChild(sum);
-    const div = document.createElement("div");
-    div.appendChild(buildTable(table));
-    det.appendChild(div);
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    wrap.appendChild(buildTable(table));
+    det.appendChild(wrap);
     card.appendChild(det);
   }
 
@@ -77,7 +237,7 @@ function renderGraphCard(title, imageB64, insight, table) {
 function buildTable(rows) {
   const t = document.createElement("table");
   t.className = "data-table";
-  if (rows.length === 0) return t;
+  if (!rows.length) return t;
   const keys = Object.keys(rows[0]);
   const thead = t.createTHead();
   const tr = thead.insertRow();
@@ -88,70 +248,78 @@ function buildTable(rows) {
     keys.forEach(k => {
       const td = tr2.insertCell();
       const v = row[k];
-      td.textContent = typeof v === "number" ? v.toLocaleString("ja-JP", { maximumFractionDigits: 2 }) : (v ?? "");
+      if (typeof v === "number") {
+        td.textContent = Number.isInteger(v) ? v.toLocaleString("ja-JP") : v.toFixed(2);
+      } else {
+        td.textContent = v ?? "";
+      }
     });
   });
   return t;
 }
 
-function renderErrorCard(title, errorMsg) {
+function buildErrorCard(title, errorMsg) {
   const card = document.createElement("div");
   card.className = "graph-card";
-  card.innerHTML = `<div class="graph-card-header">${title}</div><div class="graph-error">⚠️ ${errorMsg}</div>`;
+  card.innerHTML = `<div class="graph-header">${title}</div><div class="graph-error">⚠️ ${errorMsg}</div>`;
   return card;
+}
+
+// ── KPI カード ──
+function buildKpiCards(df_info) {
+  // df_info は /sessions/{sid}/summary の返り値
+  // 追加の KPI は分析結果から読む想定だが、ここではシンプルに行数・月数・店舗数
+  kpiBar.innerHTML = "";
+  const items = [
+    { label: "データ件数",    value: (df_info.rows || 0).toLocaleString("ja-JP"), sub: "明細行数" },
+    { label: "選択月数",      value: selectedMonths.size + " ヶ月",  sub: [...selectedMonths].join(" / ") },
+    { label: "対象店舗",      value: (df_info.stores?.length || 0) + " 店", sub: "取得済み店舗数" },
+    { label: "列数",          value: (df_info.columns?.length || 0) + " 列", sub: "分析可能な項目数" },
+  ];
+  items.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "kpi-card";
+    card.innerHTML = `
+      <div class="kpi-label">${item.label}</div>
+      <div class="kpi-value">${item.value}</div>
+      <div class="kpi-sub">${item.sub}</div>`;
+    kpiBar.appendChild(card);
+  });
 }
 
 // ── 初期化 ──
 async function init() {
-  // セッション作成
   try {
     const { session_id } = await api.createSession();
     sessionId = session_id;
   } catch (e) {
-    showToast("セッション作成に失敗しました。サーバーを確認してください。", "error");
+    showToast("サーバーに接続できません。バックエンドを確認してください。", "error");
     return;
   }
 
-  // 利用可能な月を取得
+  // 月チップ
   try {
     const { months } = await api.getMonths();
-    monthSelect.innerHTML = "";
-    months.forEach(m => {
-      const opt = document.createElement("option");
-      opt.value = m;
-      opt.textContent = m;
-      monthSelect.appendChild(opt);
-    });
-    // 直近2ヶ月をデフォルト選択
-    const recent = months.slice(-2);
-    Array.from(monthSelect.options).forEach(o => {
-      o.selected = recent.includes(o.value);
-    });
+    renderMonthChips(months);
   } catch (e) {
     showToast(`月一覧の取得に失敗: ${e.message}`, "error");
+    monthChips.innerHTML = '<span style="font-size:11px;color:var(--danger)">取得失敗</span>';
   }
 
-  // 店舗一覧を取得
+  // 店舗リスト
   try {
     const { stores } = await api.getStores();
-    storeSelect.innerHTML = '<option value="">全店舗</option>';
-    stores.forEach(s => {
-      const opt = document.createElement("option");
-      opt.value = s.store_id;
-      opt.textContent = s.store_name;
-      storeSelect.appendChild(opt);
-    });
+    renderStoreList(stores);
   } catch (e) {
     showToast(`店舗一覧の取得に失敗: ${e.message}`, "error");
   }
 
-  // 音声入力サポート確認
+  // 音声サポート確認
   if (!VoiceRecorder.isSupported()) {
     voiceBtn.disabled = true;
-    voiceBtn.title = "このブラウザは音声入力をサポートしていません";
+    voiceBtn.title = "このブラウザは音声入力に対応していません";
   }
 
-  // イベントリスナー登録
   fetchBtn.addEventListener("click", onFetchClick);
   chatSendBtn.addEventListener("click", onChatSend);
   clearChatBtn.addEventListener("click", onClearChat);
@@ -163,77 +331,93 @@ async function init() {
 
 // ── データ取得 ──
 async function onFetchClick() {
-  const selectedMonths = Array.from(monthSelect.selectedOptions).map(o => o.value);
-  if (selectedMonths.length === 0) {
-    showToast("月を1つ以上選択してください。", "warn");
+  if (selectedMonths.size === 0) {
+    showToast("分析期間を1ヶ月以上選択してください。", "warn");
     return;
   }
-  const selectedStoreIds = Array.from(storeSelect.selectedOptions)
-    .map(o => o.value).filter(v => v !== "").map(Number);
 
+  const months = [...selectedMonths].sort();
+  const storeIds = selectedStoreIds.size > 0 ? [...selectedStoreIds] : null;
+
+  // UI リセット
   fetchBtn.disabled = true;
-  progressArea.style.display = "flex";
+  progressWrap.classList.remove("hidden");
   progressFill.style.width = "0%";
-  progressText.textContent = "データ取得を開始します…";
-  analysisArea.innerHTML = "";
-  chatMessages.innerHTML = "";
+  progressText.textContent = "接続中…";
+  emptyState.style.display = "none";
+  loadedState.style.display = "none";
+  chatMsgs.innerHTML = "";
   chatGraphsArea.innerHTML = "";
-  chatSection.style.display = "none";
+  analysisGrid.innerHTML = "";
+  kpiBar.innerHTML = "";
+
+  // スケルトン表示
+  emptyState.style.display = "none";
+  loadedState.style.display = "flex";
+  loadedState.style.flexDirection = "column";
+  infoRows.textContent = "取得中…";
+  infoMonths.textContent = months.join(", ");
+  infoStores.textContent = storeIds ? `${storeIds.length}店選択` : "全店舗";
+  showSkeletons(6);
+  analysisGrid.appendChild(skeletonGrid);
 
   try {
     await api.fetchData(
-      sessionId,
-      selectedMonths,
-      selectedStoreIds.length > 0 ? selectedStoreIds : null,
+      sessionId, months, storeIds,
       (done, total, rows, pct) => {
         progressFill.style.width = `${pct}%`;
-        progressText.textContent = `📡 ${done}/${total} チャンク完了 (${pct}%) — 累計 ${rows.toLocaleString()} 件`;
+        progressText.textContent = `📡 ${done}/${total} チャンク完了 (${pct}%) — ${rows.toLocaleString()} 件`;
       }
     );
 
     progressFill.style.width = "100%";
-    progressText.textContent = "✅ データ取得完了。分析を実行中…";
-    showToast("データ取得完了！分析を実行中です。", "success");
+    progressText.textContent = "✅ 取得完了 — 分析を実行中…";
+    sbStatus.classList.remove("hidden");
 
-    // 6項目分析を自動実行
+    // サマリー情報取得 → KPI
+    const summary = await api.getSessionSummary(sessionId);
+    infoRows.textContent = summary.rows?.toLocaleString() ?? "—";
+    infoStores.textContent = summary.stores?.length ? `${summary.stores.length}店` : "全店舗";
+    buildKpiCards(summary);
+
+    // チャット有効化
+    chatInput.disabled = false;
+    chatSendBtn.disabled = false;
+    voiceBtn.disabled = !VoiceRecorder.isSupported();
+
+    showToast("データ取得完了！6項目の分析を実行中です。", "success");
+
+    // 6項目分析
     await runBuiltinAnalysis();
-
-    // チャット欄を表示
-    chatSection.style.display = "block";
 
   } catch (e) {
     showToast(`エラー: ${e.message}`, "error");
-    progressText.textContent = `❌ エラー: ${e.message}`;
+    progressText.textContent = `❌ ${e.message}`;
+    emptyState.style.display = "flex";
+    loadedState.style.display = "none";
   } finally {
     fetchBtn.disabled = false;
+    setTimeout(() => progressWrap.classList.add("hidden"), 2000);
   }
 }
 
 // ── 6項目分析 ──
 async function runBuiltinAnalysis() {
-  analysisArea.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:20px;">
-    <span class="spinner"></span> 6項目の分析を実行中…
-  </div>`;
-
   try {
     const { analyses } = await api.runAnalysis(sessionId);
-    analysisArea.innerHTML = "";
 
-    const header = document.createElement("div");
-    header.className = "section-header";
-    header.innerHTML = `<h2>🔬 ベース分析（6項目）</h2>`;
-    analysisArea.appendChild(header);
-
-    const grid = document.createElement("div");
-    grid.className = "graph-grid";
+    // スケルトンをクリアしてグリッド再構築
+    analysisGrid.innerHTML = "";
     analyses.forEach(a => {
-      const card = renderGraphCard(a.title, a.image_b64, a.insight, a.table);
-      grid.appendChild(card);
+      const card = a.image_b64
+        ? buildGraphCard(a.title, a.image_b64, a.insight, a.table)
+        : buildErrorCard(a.title, a.insight || "グラフ生成エラー");
+      analysisGrid.appendChild(card);
     });
-    analysisArea.appendChild(grid);
+
     showToast("6項目の分析が完了しました。", "success");
   } catch (e) {
-    analysisArea.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>分析エラー: ${e.message}</p></div>`;
+    analysisGrid.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--danger);">⚠️ 分析エラー: ${e.message}</div>`;
     showToast(`分析エラー: ${e.message}`, "error");
   }
 }
@@ -242,67 +426,87 @@ async function runBuiltinAnalysis() {
 async function onChatSend() {
   const message = chatInput.value.trim();
   if (!message || !sessionId) return;
+  if (chatInput.disabled) {
+    showToast("先にデータを取得してください。", "warn");
+    return;
+  }
 
-  appendMessage("user", message);
+  appendMsg("user", message);
   chatInput.value = "";
   chatSendBtn.disabled = true;
 
-  const loadingMsg = appendMessage("assistant", "🤔 分析中…");
+  const loadingMsg = appendMsg("assistant", '<span class="spinner"></span> 分析中…');
+
+  // チャットタブに自動切り替え
+  document.querySelector(".tab[data-tab='chat']")?.click();
 
   try {
     const result = await api.chat(sessionId, message);
     loadingMsg.remove();
-    if (result.text) appendMessage("assistant", result.text);
+    if (result.text) appendMsg("assistant", result.text);
 
-    // グラフ表示
-    if (result.graphs && result.graphs.length > 0) {
-      const grid = document.createElement("div");
-      grid.className = "graph-grid";
+    if (result.graphs?.length) {
+      // チャットグラフエリアの empty state を消す
+      const empty = chatGraphsArea.querySelector(".empty-state");
+      if (empty) empty.remove();
+
       result.graphs.forEach((g, i) => {
-        if (g.image_b64) {
-          grid.appendChild(renderGraphCard(`チャットグラフ ${i + 1}`, g.image_b64, "", null));
-        } else if (g.error) {
-          grid.appendChild(renderErrorCard(`グラフ ${i + 1}`, g.error));
-        }
+        const label = `チャットグラフ ${chatGraphsArea.querySelectorAll(".graph-card").length + 1}`;
+        const card = g.image_b64
+          ? buildGraphCard(label, g.image_b64, "", null)
+          : buildErrorCard(label, g.error || "描画エラー");
+        chatGraphsArea.appendChild(card);
       });
-      chatGraphsArea.appendChild(grid);
     }
   } catch (e) {
-    loadingMsg.textContent = `❌ エラー: ${e.message}`;
+    loadingMsg.innerHTML = `❌ ${e.message}`;
     showToast(`チャットエラー: ${e.message}`, "error");
   } finally {
     chatSendBtn.disabled = false;
   }
 }
 
-function appendMessage(role, text) {
+function appendMsg(role, html) {
   const div = document.createElement("div");
   div.className = `msg msg-${role}`;
-  div.innerHTML = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-                       .replace(/\n/g, "<br>");
-  chatMessages.appendChild(div);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
+  div.innerHTML = typeof html === "string"
+    ? html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>")
+    : html;
+  chatMsgs.appendChild(div);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
   return div;
 }
 
 async function onClearChat() {
   if (!sessionId) return;
-  await api.clearChat(sessionId);
-  chatMessages.innerHTML = "";
-  chatGraphsArea.innerHTML = "";
-  showToast("チャット履歴をクリアしました。", "info");
+  try {
+    await api.clearChat(sessionId);
+    chatMsgs.innerHTML = "";
+    chatGraphsArea.innerHTML = `
+      <div class="empty-state" style="padding:40px 0;grid-column:1/-1;">
+        <div class="empty-icon" style="font-size:36px;opacity:.3;">💬</div>
+        <div class="empty-desc">左パネルのチャットで分析を指示すると<br>グラフがここに表示されます。</div>
+      </div>`;
+    showToast("チャット履歴をクリアしました。", "info");
+  } catch (e) {
+    showToast(`クリアエラー: ${e.message}`, "error");
+  }
 }
 
 // ── 音声入力 ──
 async function onVoiceClick() {
-  if (!sessionId) { showToast("先にデータを取得してください。", "warn"); return; }
+  if (!sessionId || chatInput.disabled) {
+    showToast("先にデータを取得してください。", "warn");
+    return;
+  }
+
   if (!isRecording) {
     try {
       voiceRecorder = new VoiceRecorder();
       await voiceRecorder.start();
       isRecording = true;
       voiceBtn.classList.add("recording");
-      voiceBtn.title = "録音中…クリックで停止";
+      voiceBtn.title = "録音中… もう一度クリックで停止";
       showToast("🎤 録音中… もう一度クリックで停止", "info");
     } catch (e) {
       showToast(`マイクエラー: ${e.message}`, "error");
@@ -313,13 +517,12 @@ async function onVoiceClick() {
       isRecording = false;
       voiceBtn.classList.remove("recording");
       voiceBtn.title = "音声入力";
-      showToast("音声を変換中…", "info");
-
+      showToast("音声をテキストに変換中…", "info");
       const { text } = await api.transcribeAudio(sessionId, blob);
       if (text) {
         chatInput.value = (chatInput.value ? chatInput.value + " " : "") + text;
         chatInput.focus();
-        showToast(`音声変換完了: 「${text}」`, "success");
+        showToast(`変換完了: 「${text}」`, "success");
       }
     } catch (e) {
       isRecording = false;

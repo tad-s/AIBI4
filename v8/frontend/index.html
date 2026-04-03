@@ -3,93 +3,166 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AIBI4 V8 — LLM BI アシスタント</title>
+  <title>AIBI4 — LLM BI アシスタント</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-<!-- ===== SIDEBAR ===== -->
+<!-- ===============================
+     SIDEBAR
+     =============================== -->
 <aside id="sidebar">
-  <h1>AIBI4 <span>v8.0</span></h1>
 
-  <!-- 月選択 -->
-  <div class="sidebar-section">
-    <label>📅 分析月を選択</label>
-    <select id="month-select" multiple size="6">
-      <option>読み込み中…</option>
-    </select>
-    <small style="color:var(--text-muted);font-size:11px">Ctrl/Cmd クリックで複数選択</small>
+  <!-- ヘッダー -->
+  <div class="sb-header">
+    <div class="sb-logo">🍺 AIBI4 <small>v8.1</small></div>
+    <div id="sb-status" class="sb-status-badge hidden">● 読込済</div>
   </div>
 
-  <!-- 店舗選択 -->
-  <div class="sidebar-section">
-    <label>🏪 店舗フィルタ（任意）</label>
-    <select id="store-select" multiple size="5">
-      <option value="">全店舗</option>
-    </select>
-    <small style="color:var(--text-muted);font-size:11px">未選択 = 全店舗</small>
-  </div>
+  <!-- スクロール可能コントロールエリア -->
+  <div class="sb-controls">
 
-  <!-- 取得ボタン -->
-  <button id="fetch-btn" class="btn btn-primary">
-    🔄 DB からデータを取得
-  </button>
-
-  <!-- プログレス -->
-  <div id="progress-area" style="display:none;flex-direction:column;gap:6px;">
-    <div class="progress-bar-wrap">
-      <div id="progress-fill" class="progress-bar-fill" style="width:0%"></div>
+    <!-- 分析期間 (チップ式) -->
+    <div>
+      <div class="ctrl-label">📅 分析期間</div>
+      <div id="month-chips" class="chip-group">
+        <span class="chip" style="pointer-events:none;opacity:.5">読み込み中…</span>
+      </div>
+      <div class="chip-hint">クリックで選択（複数可）</div>
     </div>
-    <div id="progress-text" style="font-size:11px;color:var(--text-muted)">取得中…</div>
-  </div>
 
-  <hr style="border-color:var(--border);margin:4px 0;">
+    <!-- 店舗フィルタ -->
+    <div>
+      <div class="ctrl-label">🏪 店舗フィルタ <span style="font-size:9px;color:var(--text-muted);text-transform:none;letter-spacing:0">（未選択 = 全店舗）</span></div>
+      <div class="store-search-wrap">
+        <input id="store-search" type="text" placeholder="店舗を絞り込む…">
+      </div>
+      <div id="store-list" class="store-list"></div>
+      <div id="store-preview" class="store-selected-preview"></div>
+    </div>
 
-  <!-- バージョン情報 -->
-  <div style="font-size:11px;color:var(--text-muted);line-height:1.8;">
-    <div>FastAPI + Vanilla JS</div>
-    <div>Supabase + OpenAI GPT-4.1-mini</div>
-    <div>音声入力: Whisper API</div>
-  </div>
+    <!-- 取得ボタン + プログレス -->
+    <div class="fetch-area">
+      <button id="fetch-btn" class="btn btn-primary">
+        🔄 データを取得する
+      </button>
+      <div id="progress-wrap" class="progress-wrap hidden">
+        <div class="progress-track">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div id="progress-text" class="progress-text">取得中…</div>
+      </div>
+    </div>
+
+  </div><!-- /sb-controls -->
+
+  <!-- =====================
+       チャット (下部固定)
+       ===================== -->
+  <div class="sb-chat">
+
+    <div class="sb-chat-header">
+      <div class="ctrl-label">🧠 分析チャット</div>
+      <button id="clear-chat-btn" class="icon-btn-sm" title="履歴クリア">🗑</button>
+    </div>
+
+    <div id="chat-msgs" class="chat-msgs">
+      <div class="msg msg-assistant" style="opacity:.5;font-size:11px;">
+        データを取得後、ここに分析結果が表示されます。
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <textarea id="chat-input" rows="2"
+        placeholder="例: 御茶ノ水店の先月売上は？ 商品別に見たい"
+        disabled></textarea>
+      <div class="chat-actions">
+        <button id="voice-btn" class="icon-btn" title="音声入力" disabled>🎤</button>
+        <button id="chat-send-btn" class="btn btn-accent" disabled>送信</button>
+      </div>
+    </div>
+
+  </div><!-- /sb-chat -->
+
 </aside>
 
-<!-- ===== MAIN ===== -->
+
+<!-- ===============================
+     MAIN
+     =============================== -->
 <main id="main">
 
-  <!-- チャット（データ取得後に表示） -->
-  <section id="chat-section" style="display:none;">
-    <h2 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--accent);">
-      🧠 分析指示チャット
-    </h2>
+  <!-- ── 空の状態 ── -->
+  <div id="empty-state" class="empty-state">
+    <div class="empty-icon">📊</div>
+    <div class="empty-title">LLM BI アシスタント</div>
+    <div class="empty-desc">左パネルで分析期間と店舗を設定し、データを取得してください。</div>
+    <div class="empty-steps">
+      <div class="empty-step">
+        <div class="step-num">1</div>
+        <div class="step-text"><strong>分析期間</strong>を月単位でクリック選択（複数可）</div>
+      </div>
+      <div class="empty-step">
+        <div class="step-num">2</div>
+        <div class="step-text"><strong>店舗フィルタ</strong>を必要に応じて絞り込む（任意）</div>
+      </div>
+      <div class="empty-step">
+        <div class="step-num">3</div>
+        <div class="step-text">「<strong>データを取得する</strong>」をクリック → 6項目の分析が自動実行されます</div>
+      </div>
+      <div class="empty-step">
+        <div class="step-num">4</div>
+        <div class="step-text">左下の<strong>チャット</strong>で追加分析を指示（音声入力対応）</div>
+      </div>
+    </div>
+  </div>
 
-    <div id="chat-messages"></div>
+  <!-- ── 読込済状態 ── -->
+  <div id="loaded-state">
 
-    <div class="chat-input-row" style="margin-bottom:10px;">
-      <textarea id="chat-input" rows="2"
-        placeholder="分析指示を入力… 例: 「御茶ノ水店の商品別売上を教えて」"></textarea>
-      <button id="voice-btn" title="音声入力">🎤</button>
-      <button id="chat-send-btn" class="btn btn-primary" style="width:80px;height:44px;">送信</button>
+    <!-- データ情報バー -->
+    <div class="data-info-bar">
+      <div class="data-info-item">
+        <div class="data-info-dot"></div>
+        <span>データ取得済</span>
+      </div>
+      <div class="data-info-item">📋 <strong id="info-rows">—</strong> 件</div>
+      <div class="data-info-item">📅 <strong id="info-months">—</strong></div>
+      <div class="data-info-item">🏪 <strong id="info-stores">—</strong></div>
     </div>
 
-    <button id="clear-chat-btn" class="btn btn-secondary" style="width:auto;padding:6px 14px;font-size:12px;">
-      🗑 履歴クリア
-    </button>
+    <!-- KPI カード -->
+    <div id="kpi-bar" class="kpi-bar"></div>
 
-    <!-- チャットで生成されたグラフ -->
-    <div id="chat-graphs-area" style="margin-top:16px;"></div>
-  </section>
-
-  <!-- 6項目分析エリア -->
-  <section id="analysis-area">
-    <div class="empty-state">
-      <div class="icon">📊</div>
-      <p>左のサイドバーで分析月を選択し、<br>「DB からデータを取得」をクリックしてください。<br><br>データ取得後、6項目の分析が自動実行されます。</p>
+    <!-- タブナビゲーション -->
+    <div class="tabs" id="tab-nav">
+      <button class="tab active" data-tab="analysis">🔬 ベース分析（6項目）</button>
+      <button class="tab" data-tab="chat">💬 チャット分析</button>
     </div>
-  </section>
+
+    <!-- タブパネル: ベース分析 -->
+    <div id="tab-analysis" class="tab-panel active">
+      <div id="analysis-grid" class="graph-grid">
+        <!-- スケルトン（分析実行前） -->
+        <div class="loading-grid" id="skeleton-grid" style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:16px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- タブパネル: チャット分析 -->
+    <div id="tab-chat" class="tab-panel">
+      <div id="chat-graphs-area" class="graph-grid">
+        <div class="empty-state" style="padding:40px 0;grid-column:1/-1;">
+          <div class="empty-icon" style="font-size:36px;opacity:.3;">💬</div>
+          <div class="empty-desc">左パネルのチャットで分析を指示すると<br>グラフがここに表示されます。</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /loaded-state -->
 
 </main>
 
-<!-- Toast -->
 <div id="toast"></div>
 
 <script type="module" src="/js/app.js"></script>
