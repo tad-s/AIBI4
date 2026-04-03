@@ -193,8 +193,11 @@ def sanitize_code(code: str) -> str:
         code,
     )
     font_fix = (
+        "import platform as _plt_platform\n"
         "import matplotlib\nmatplotlib.use('Agg')\n"
-        "plt.rcParams['font.family'] = 'DejaVu Sans'\n"
+        "plt.rcParams['font.family'] = ['Yu Gothic','Meiryo','MS Gothic','DejaVu Sans'] "
+        "if _plt_platform.system()=='Windows' else "
+        "['Noto Sans CJK JP','IPAGothic','DejaVu Sans']\n"
         "plt.rcParams['axes.unicode_minus'] = False\n"
     )
     return font_fix + code

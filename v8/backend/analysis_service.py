@@ -16,7 +16,11 @@ import numpy as np
 import pandas as pd
 
 # ── 日本語フォント設定 ──
-plt.rcParams["font.family"] = "DejaVu Sans"  # Railway/Linux fallback
+import platform
+if platform.system() == "Windows":
+    plt.rcParams["font.family"] = ["Yu Gothic", "Meiryo", "MS Gothic", "DejaVu Sans"]
+else:
+    plt.rcParams["font.family"] = ["Noto Sans CJK JP", "IPAGothic", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 # ── キーワード辞書 ──

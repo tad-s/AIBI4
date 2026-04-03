@@ -2,11 +2,17 @@
 AIBI4 V8 — FastAPI バックエンド
 起動: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 """
+import mimetypes
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+
+# Windows では .js が text/plain になる場合があるため明示的に上書き
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("text/html", ".html")
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
