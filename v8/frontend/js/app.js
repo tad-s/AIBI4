@@ -24,6 +24,12 @@ const progressFill    = $("progress-fill");
 const progressText    = $("progress-text");
 const sbStatus        = $("sb-status");
 const emptyState      = $("empty-state");
+const fetchState      = $("fetch-state");
+const fpBarFill       = $("fp-bar-fill");
+const fpPct           = $("fp-pct");
+const fpDetail        = $("fp-detail");
+const fpRows          = $("fp-rows");
+const fpMonths        = $("fp-months");
 const loadedState     = $("loaded-state");
 const infoRows        = $("info-rows");
 const infoMonths      = $("info-months");
@@ -346,9 +352,6 @@ async function onFetchClick() {
 
   // UI リセット
   fetchBtn.disabled = true;
-  progressWrap.classList.remove("hidden");
-  progressFill.style.width = "0%";
-  progressText.textContent = "接続中…";
   emptyState.style.display = "none";
   loadedState.style.display = "none";
   chatMsgs.innerHTML = "";
@@ -356,28 +359,62 @@ async function onFetchClick() {
   analysisGrid.innerHTML = "";
   kpiBar.innerHTML = "";
 
-  // スケルトン表示
-  emptyState.style.display = "none";
-  loadedState.style.display = "flex";
-  loadedState.style.flexDirection = "column";
-  infoRows.textContent = "取得中…";
-  infoMonths.textContent = months.join(", ");
-  infoStores.textContent = storeIds ? `${storeIds.length}店選択` : "全店舗";
-  showSkeletons(6);
-  analysisGrid.appendChild(skeletonGrid);
+  // ── メイン進捗パネルを表示 ──
+  fetchState.style.display = "flex";
+  fpBarFill.style.width = "0%";
+  fpPct.textContent = "0%";
+  fpDetail.textContent = "Supabase に接続中…";
+  fpRows.textContent = "累計 0 件取得";
+
+  // 月チップを進捗パネルに表示
+  fpMonths.innerHTML = months.map(m =>
+    `<span class="fp-month-chip" id="fpc-${m}">${m}</span>`
+  ).join("");
+
+  // サイドバーのプログレスバーも更新
+  progressWrap.classList.remove("hidden");
+  progressFill.style.width = "0%";
+  progressText.textContent = "接続中…";
 
   try {
     await api.fetchData(
       sessionId, months, storeIds,
-      (done, total, rows, pct) => {
+      (done, total, rows, pct, month) => {
+        // メインパネル更新
+        fpBarFill.style.width = `${pct}%`;
+        fpPct.textContent = `${pct}%`;
+        fpDetail.textContent = `${month} — ${done} / ${total} チャンク完了`;
+        fpRows.textContent = `累計 ${rows.toLocaleString()} 件取得`;
+        // アクティブ月チップをハイライト
+        fpMonths.querySelectorAll(".fp-month-chip").forEach(c => c.classList.remove("active"));
+        const chip = document.getElementById(`fpc-${month}`);
+        if (chip) chip.classList.add("active");
+        // サイドバー更新
         progressFill.style.width = `${pct}%`;
-        progressText.textContent = `📡 ${done}/${total} チャンク完了 (${pct}%) — ${rows.toLocaleString()} 件`;
+        progressText.textContent = `${done}/${total} チャンク完了 (${pct}%)`;
       }
     );
 
+    // 取得完了 → 進捗パネルを閉じてロード済み表示へ
+    fpBarFill.style.width = "100%";
+    fpPct.textContent = "100%";
+    fpDetail.textContent = "✅ 取得完了 — 分析を実行中…";
+    fpMonths.querySelectorAll(".fp-month-chip").forEach(c => c.classList.add("active"));
     progressFill.style.width = "100%";
-    progressText.textContent = "✅ 取得完了 — 分析を実行中…";
+    progressText.textContent = "✅ 取得完了";
+
+    await new Promise(r => setTimeout(r, 600)); // 完了を一瞬見せる
+
+    fetchState.style.display = "none";
     sbStatus.classList.remove("hidden");
+
+    // ロード済み状態へ
+    loadedState.style.display = "flex";
+    loadedState.style.flexDirection = "column";
+    infoMonths.textContent = months.join(", ");
+    infoStores.textContent = storeIds ? `${storeIds.length}店選択` : "全店舗";
+    showSkeletons(6);
+    analysisGrid.appendChild(skeletonGrid);
 
     // サマリー情報取得 → KPI
     const summary = await api.getSessionSummary(sessionId);
@@ -397,12 +434,11 @@ async function onFetchClick() {
 
   } catch (e) {
     showToast(`エラー: ${e.message}`, "error");
-    progressText.textContent = `❌ ${e.message}`;
+    fetchState.style.display = "none";
     emptyState.style.display = "flex";
-    loadedState.style.display = "none";
   } finally {
     fetchBtn.disabled = false;
-    setTimeout(() => progressWrap.classList.add("hidden"), 2000);
+    setTimeout(() => progressWrap.classList.add("hidden"), 3000);
   }
 }
 

@@ -144,10 +144,13 @@ async def fetch_data(req: FetchRequest):
     chunks = _week_ranges(start_date, end_date)
     total_chunks = len(chunks)
 
+    # チャンクの月ラベルを事前に計算（開始日の YYYY-MM）
+    chunk_month = {(cs, ce): cs[:7] for cs, ce in chunks}
+
     async def event_stream():
         all_rows: list[dict] = []
         done = 0
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             future_map = {
@@ -155,6 +158,8 @@ async def fetch_data(req: FetchRequest):
                 for cs, ce in chunks
             }
             for future in as_completed(future_map):
+                cs, ce = future_map[future]
+                month_label = chunk_month[(cs, ce)]
                 try:
                     chunk_rows = await loop.run_in_executor(None, future.result)
                     all_rows.extend(chunk_rows)
@@ -164,7 +169,7 @@ async def fetch_data(req: FetchRequest):
 
                 done += 1
                 pct = round(done / total_chunks * 100)
-                yield f"data: {json.dumps({'type':'progress','done':done,'total':total_chunks,'rows':len(all_rows),'pct':pct})}\n\n"
+                yield f"data: {json.dumps({'type':'progress','done':done,'total':total_chunks,'rows':len(all_rows),'pct':pct,'month':month_label})}\n\n"
                 await asyncio.sleep(0)  # allow event loop to flush
 
         if all_rows:

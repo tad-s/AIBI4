@@ -70,7 +70,7 @@ export function fetchData(sid, months, storeIds, onProgress) {
             if (!line) continue;
             try {
               const ev = JSON.parse(line);
-              if (ev.type === "progress") onProgress(ev.done, ev.total, ev.rows, ev.pct);
+              if (ev.type === "progress") onProgress(ev.done, ev.total, ev.rows, ev.pct, ev.month ?? "");
               if (ev.type === "error") reject(new Error(ev.message));
               if (ev.type === "done") resolve(ev);
             } catch {}

@@ -563,6 +563,89 @@ details > .table-wrap { padding: 10px; overflow-x: auto; background: var(--surfa
 #toast.warn    { border-left: 3px solid var(--warn); }
 #toast.info    { border-left: 3px solid var(--accent); }
 
+/* ── fetch progress panel (main area) ── */
+#fetch-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+.fetch-progress-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px 40px;
+  width: 100%;
+  max-width: 560px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.08);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.fp-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.fp-months {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fp-month-chip {
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+.fp-month-chip.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.fp-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.fp-bar-track {
+  flex: 1;
+  height: 12px;
+  background: var(--surface3);
+  border-radius: 99px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.fp-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 99px;
+  transition: width .5s cubic-bezier(.4,0,.2,1);
+}
+.fp-pct {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+  min-width: 48px;
+  text-align: right;
+}
+.fp-detail {
+  font-size: 13px;
+  color: var(--text-sub);
+  font-weight: 500;
+}
+.fp-rows {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+}
+
 /* ── utility ── */
 .hidden { display: none !important; }
 .flex-center { display: flex; align-items: center; justify-content: center; }
