@@ -2,27 +2,42 @@
  * api.js — バックエンド API の薄いラッパー
  */
 const BASE = "";  // 同一オリジンで配信されるため空文字
+const TIMEOUT_MS = 20000;  // 20秒タイムアウト
+
+async function _fetch(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const r = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timer);
+    return r;
+  } catch (e) {
+    clearTimeout(timer);
+    if (e.name === "AbortError") throw new Error("サーバーへの接続がタイムアウトしました。");
+    throw new Error("サーバーに接続できません。uvicorn が起動しているか確認してください。");
+  }
+}
 
 export async function getMonths() {
-  const r = await fetch(`${BASE}/api/months`);
+  const r = await _fetch(`${BASE}/api/months`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 export async function getStores() {
-  const r = await fetch(`${BASE}/api/stores`);
+  const r = await _fetch(`${BASE}/api/stores`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 export async function createSession() {
-  const r = await fetch(`${BASE}/api/sessions`, { method: "POST" });
+  const r = await _fetch(`${BASE}/api/sessions`, { method: "POST" });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 export async function getSessionSummary(sid) {
-  const r = await fetch(`${BASE}/api/sessions/${sid}/summary`);
+  const r = await _fetch(`${BASE}/api/sessions/${sid}/summary`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
@@ -64,7 +79,9 @@ export function fetchData(sid, months, storeIds, onProgress) {
         }).catch(reject);
       }
       pump();
-    }).catch(reject);
+    }).catch(e => {
+      reject(new Error("サーバーに接続できません。uvicorn が起動しているか確認してください。"));
+    });
   });
 }
 

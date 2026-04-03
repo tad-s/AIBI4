@@ -289,11 +289,15 @@ function buildKpiCards(df_info) {
 
 // ── 初期化 ──
 async function init() {
+  // セッション作成
   try {
     const { session_id } = await api.createSession();
     sessionId = session_id;
   } catch (e) {
-    showToast("サーバーに接続できません。バックエンドを確認してください。", "error");
+    const msg = e.message || "サーバー未接続";
+    showToast(msg, "error");
+    monthChips.innerHTML = `<span style="font-size:11px;color:var(--danger)">⚠️ サーバー未接続</span>`;
+    storeList.innerHTML = `<div style="font-size:11px;color:var(--danger);padding:6px 8px;">http://localhost:8000 で起動してください</div>`;
     return;
   }
 
@@ -303,7 +307,7 @@ async function init() {
     renderMonthChips(months);
   } catch (e) {
     showToast(`月一覧の取得に失敗: ${e.message}`, "error");
-    monthChips.innerHTML = '<span style="font-size:11px;color:var(--danger)">取得失敗</span>';
+    monthChips.innerHTML = `<span style="font-size:11px;color:var(--danger)">⚠️ 取得失敗</span>`;
   }
 
   // 店舗リスト
@@ -312,6 +316,7 @@ async function init() {
     renderStoreList(stores);
   } catch (e) {
     showToast(`店舗一覧の取得に失敗: ${e.message}`, "error");
+    storeList.innerHTML = `<div style="font-size:11px;color:var(--danger);padding:6px 8px;">取得失敗</div>`;
   }
 
   // 音声サポート確認
