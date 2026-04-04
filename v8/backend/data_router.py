@@ -18,6 +18,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from supabase import create_client
 
+# グローバルエグゼキューター（shutdown を呼ばないことで async 内ブロックを回避）
+_executor = ThreadPoolExecutor(max_workers=4)
+
 import session as sess
 from llm_service import build_data_summary
 
@@ -146,36 +149,30 @@ async def fetch_data(req: FetchRequest):
     # チャンクの月ラベルを事前に計算（開始日の YYYY-MM）
     chunk_month = {(cs, ce): cs[:7] for cs, ce in chunks}
 
-    async def _fetch_chunk_async(executor: ThreadPoolExecutor, cs: str, ce: str) -> tuple[str, str, list[dict]]:
-        """非同期でチャンクを取得し (cs, ce, rows) を返す。"""
+    async def _fetch_async(cs: str, ce: str) -> tuple[str, str, list[dict]]:
         loop = asyncio.get_running_loop()
-        rows = await loop.run_in_executor(executor, _fetch_chunk, cs, ce, req.store_ids)
+        rows = await loop.run_in_executor(_executor, _fetch_chunk, cs, ce, req.store_ids)
         return cs, ce, rows
 
     async def event_stream():
         all_rows: list[dict] = []
         done = 0
 
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            # asyncio タスクとして投入（event loop をブロックしない）
-            tasks = [
-                asyncio.ensure_future(_fetch_chunk_async(executor, cs, ce))
-                for cs, ce in chunks
-            ]
-            # asyncio.as_completed は非同期対応
-            for coro in asyncio.as_completed(tasks):
-                try:
-                    cs, ce, chunk_rows = await coro
-                    all_rows.extend(chunk_rows)
-                except Exception as e:
-                    yield f"data: {json.dumps({'type':'error','message':str(e)})}\n\n"
-                    done += 1
-                    continue
+        tasks = [asyncio.ensure_future(_fetch_async(cs, ce)) for cs, ce in chunks]
 
+        for coro in asyncio.as_completed(tasks):
+            try:
+                cs, ce, chunk_rows = await coro
+                all_rows.extend(chunk_rows)
+            except Exception as e:
                 done += 1
-                month_label = chunk_month.get((cs, ce), cs[:7])
-                pct = round(done / total_chunks * 100)
-                yield f"data: {json.dumps({'type':'progress','done':done,'total':total_chunks,'rows':len(all_rows),'pct':pct,'month':month_label})}\n\n"
+                yield f"data: {json.dumps({'type':'error','message':str(e)})}\n\n"
+                continue
+
+            done += 1
+            month_label = chunk_month.get((cs, ce), cs[:7])
+            pct = round(done / total_chunks * 100)
+            yield f"data: {json.dumps({'type':'progress','done':done,'total':total_chunks,'rows':len(all_rows),'pct':pct,'month':month_label})}\n\n"
 
         loop = asyncio.get_running_loop()
         if all_rows:
