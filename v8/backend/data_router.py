@@ -10,16 +10,12 @@ import asyncio
 import json
 import os
 from datetime import date, timedelta
-from concurrent.futures import ThreadPoolExecutor
 
+import httpx
 import pandas as pd
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from supabase import create_client
-
-# グローバルエグゼキューター（shutdown を呼ばないことで async 内ブロックを回避）
-_executor = ThreadPoolExecutor(max_workers=4)
 
 import session as sess
 from llm_service import build_data_summary
@@ -28,24 +24,19 @@ router = APIRouter()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
-CHUNK_DAYS   = 3
-MAX_WORKERS  = 4
+CHUNK_DAYS    = 3
+MAX_WORKERS   = 3          # 同時並列数（Supabase 負荷を抑える）
 RPC_PAGE_SIZE = 1000
+CHUNK_TIMEOUT = 120.0      # 1チャンク最大120秒（httpx レベルで切断）
 
 
-def _get_sb():
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise HTTPException(status_code=500, detail="SUPABASE_URL / SUPABASE_KEY が未設定です。")
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
-
-def _make_client():
-    """タイムアウト付きクライアントを生成する。"""
-    try:
-        from supabase import ClientOptions
-        return create_client(SUPABASE_URL, SUPABASE_KEY,
-                             options=ClientOptions(postgrest_client_timeout=45))
-    except Exception:
-        return create_client(SUPABASE_URL, SUPABASE_KEY)
+def _sb_headers() -> dict:
+    return {
+        "apikey":        SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type":  "application/json",
+        "Prefer":        "count=none",
+    }
 
 
 def _week_ranges(start_date: str, end_date: str) -> list[tuple[str, str]]:
@@ -59,10 +50,13 @@ def _week_ranges(start_date: str, end_date: str) -> list[tuple[str, str]]:
     return chunks
 
 
-def _fetch_chunk(chunk_start: str, chunk_end: str, store_ids: list[int] | None) -> list[dict]:
-    """スレッドごとに独立したクライアントで 1 チャンク取得（リトライ付き）。"""
-    import time
-    _client = _make_client()
+async def _fetch_chunk_async(
+    client: httpx.AsyncClient,
+    chunk_start: str,
+    chunk_end: str,
+    store_ids: list[int] | None,
+) -> list[dict]:
+    """httpx.AsyncClient で 1 チャンクを非同期取得（ページネーション付き）。"""
     params: dict = {"p_start_date": chunk_start, "p_end_date": chunk_end}
     if store_ids:
         params["p_store_ids"] = store_ids
@@ -70,46 +64,37 @@ def _fetch_chunk(chunk_start: str, chunk_end: str, store_ids: list[int] | None) 
     rows: list[dict] = []
     offset = 0
     while True:
-        last_exc = None
-        for retry in range(3):
-            try:
-                result = (
-                    _client.rpc("get_izakaya_sales", params)
-                    .range(offset, offset + RPC_PAGE_SIZE - 1)
-                    .execute()
-                )
-                last_exc = None
-                break
-            except Exception as e:
-                last_exc = e
-                if retry < 2:
-                    wait = 10 if "PGRST003" in str(e) else 2 ** (retry + 1)
-                    time.sleep(wait)
-        if last_exc:
-            raise last_exc
-        page_rows = result.data or []
-        rows.extend(page_rows)
-        if len(page_rows) < RPC_PAGE_SIZE:
+        resp = await client.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/get_izakaya_sales",
+            json=params,
+            headers={**_sb_headers(), "Range": f"{offset}-{offset + RPC_PAGE_SIZE - 1}"},
+        )
+        resp.raise_for_status()
+        page = resp.json()
+        if not isinstance(page, list):
+            break
+        rows.extend(page)
+        if len(page) < RPC_PAGE_SIZE:
             break
         offset += RPC_PAGE_SIZE
     return rows
 
 
 @router.get("/months")
-def get_months():
+async def get_months():
     try:
-        sb = _make_client()
-        result = (
-            sb.table("visits")
-            .select("visit_time")
-            .not_.is_("visit_time", "null")
-            .limit(3000)
-            .execute()
-        )
-        if not result.data:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{SUPABASE_URL}/rest/v1/visits",
+                params={"select": "visit_time", "visit_time": "not.is.null", "limit": "3000"},
+                headers=_sb_headers(),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        if not data:
             return {"months": []}
         dates = pd.to_datetime(
-            [r["visit_time"] for r in result.data], errors="coerce", utc=True
+            [r["visit_time"] for r in data], errors="coerce", utc=True
         )
         months = sorted({d.strftime("%Y-%m") for d in dates if pd.notna(d)})
         return {"months": months}
@@ -118,11 +103,16 @@ def get_months():
 
 
 @router.get("/stores")
-def get_stores():
+async def get_stores():
     try:
-        sb = _make_client()
-        result = sb.table("stores").select("store_id,store_name").execute()
-        return {"stores": result.data or []}
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{SUPABASE_URL}/rest/v1/stores",
+                params={"select": "store_id,store_name"},
+                headers=_sb_headers(),
+            )
+            resp.raise_for_status()
+            return {"stores": resp.json() or []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -135,18 +125,19 @@ def create_session():
 
 class FetchRequest(BaseModel):
     session_id: str
-    months: list[str]        # ["2024-09", "2024-10"]
+    months: list[str]
     store_ids: list[int] | None = None
 
 
 @router.post("/fetch")
 async def fetch_data(req: FetchRequest):
     """SSE でプログレスを配信しながら Supabase からデータを取得する。"""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="SUPABASE_URL / SUPABASE_KEY が未設定です。")
     if not sess.get_session(req.session_id):
         raise HTTPException(status_code=404, detail="セッションが見つかりません。")
 
     from calendar import monthrange
-    # 選択月ごとにチャンクを生成（月間の空き期間を含まない）
     chunks: list[tuple[str, str]] = []
     chunk_month: dict[tuple[str, str], str] = {}
     for m in sorted(req.months):
@@ -161,44 +152,43 @@ async def fetch_data(req: FetchRequest):
     async def event_stream():
         all_rows: list[dict] = []
         done = 0
-        loop = asyncio.get_running_loop()
-        sem = asyncio.Semaphore(MAX_WORKERS)  # 同時実行数を制限
+        sem = asyncio.Semaphore(MAX_WORKERS)
 
-        async def fetch_one(cs: str, ce: str) -> tuple[str, str, list[dict]]:
-            async with sem:
-                rows = await asyncio.wait_for(
-                    loop.run_in_executor(None, _fetch_chunk, cs, ce, req.store_ids),
-                    timeout=90.0,  # 1チャンク最大90秒
+        # httpx.AsyncClient を共有（接続プール再利用）
+        timeout = httpx.Timeout(connect=10.0, read=CHUNK_TIMEOUT, write=10.0, pool=5.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+
+            async def fetch_one(cs: str, ce: str) -> tuple[str, str, list[dict]]:
+                async with sem:
+                    rows = await _fetch_chunk_async(client, cs, ce, req.store_ids)
+                    return cs, ce, rows
+
+            task_map: dict[asyncio.Task, tuple[str, str]] = {
+                asyncio.create_task(fetch_one(cs, ce)): (cs, ce)
+                for cs, ce in chunks
+            }
+            pending = set(task_map.keys())
+
+            while pending:
+                finished, pending = await asyncio.wait(
+                    pending, return_when=asyncio.FIRST_COMPLETED
                 )
-                return cs, ce, rows
+                for task in finished:
+                    cs, ce = task_map[task]
+                    done += 1
+                    try:
+                        _, _, chunk_rows = task.result()
+                        all_rows.extend(chunk_rows)
+                    except Exception as e:
+                        yield f"data: {json.dumps({'type':'error','message':f'{cs}〜{ce}: {e}'})}\n\n"
 
-        # 全タスクを投入
-        task_map: dict[asyncio.Task, tuple[str, str]] = {
-            asyncio.create_task(fetch_one(cs, ce)): (cs, ce)
-            for cs, ce in chunks
-        }
-        pending = set(task_map.keys())
-
-        # 完了したものから順次 SSE 配信
-        while pending:
-            finished, pending = await asyncio.wait(
-                pending, return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in finished:
-                cs, ce = task_map[task]
-                done += 1
-                try:
-                    _, _, chunk_rows = task.result()
-                    all_rows.extend(chunk_rows)
-                except Exception as e:
-                    yield f"data: {json.dumps({'type':'error','message':f'{cs}〜{ce}: {e}'})}\n\n"
-
-                month_label = chunk_month.get((cs, ce), cs[:7])
-                pct = round(done / total_chunks * 100)
-                yield f"data: {json.dumps({'type':'progress','done':done,'total':total_chunks,'rows':len(all_rows),'pct':pct,'month':month_label})}\n\n"
+                    month_label = chunk_month.get((cs, ce), cs[:7])
+                    pct = round(done / total_chunks * 100)
+                    yield f"data: {json.dumps({'type':'progress','done':done,'total':total_chunks,'rows':len(all_rows),'pct':pct,'month':month_label})}\n\n"
 
         if all_rows:
             yield f"data: {json.dumps({'type':'processing','message':'データを整形中…'})}\n\n"
+            loop = asyncio.get_running_loop()
             df = await loop.run_in_executor(None, _build_df, all_rows)
 
             yield f"data: {json.dumps({'type':'processing','message':'LLM サマリーを生成中…'})}\n\n"
@@ -209,8 +199,11 @@ async def fetch_data(req: FetchRequest):
         else:
             yield f"data: {json.dumps({'type':'done','rows':0,'columns':[]})}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 def _build_df(rows: list[dict]) -> pd.DataFrame:
