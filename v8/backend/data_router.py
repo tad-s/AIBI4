@@ -98,7 +98,7 @@ def _fetch_chunk(chunk_start: str, chunk_end: str, store_ids: list[int] | None) 
 @router.get("/months")
 def get_months():
     try:
-        sb = _get_sb()
+        sb = _make_client()
         result = (
             sb.table("visits")
             .select("visit_time")
@@ -120,7 +120,7 @@ def get_months():
 @router.get("/stores")
 def get_stores():
     try:
-        sb = _get_sb()
+        sb = _make_client()
         result = sb.table("stores").select("store_id,store_name").execute()
         return {"stores": result.data or []}
     except Exception as e:
