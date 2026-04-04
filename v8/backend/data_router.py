@@ -71,16 +71,10 @@ async def _fetch_chunk_async(
             try:
                 resp = await client.post(
                     f"{SUPABASE_URL}/rest/v1/rpc/get_izakaya_sales",
+                    params={"limit": RPC_PAGE_SIZE, "offset": offset},  # Range ヘッダーではなくクエリパラメータで制御
                     json=params,
-                    headers={
-                        **_sb_headers(),
-                        "Range": f"{offset}-{offset + RPC_PAGE_SIZE - 1}",
-                        "Prefer": "return=representation",
-                    },
+                    headers={**_sb_headers(), "Prefer": "return=representation"},
                 )
-                # 416 = データなし / ページ外
-                if resp.status_code == 416:
-                    return rows
                 resp.raise_for_status()
                 last_exc = None
                 break
@@ -91,7 +85,7 @@ async def _fetch_chunk_async(
             except httpx.HTTPStatusError as e:
                 if e.response.status_code in _RETRY_STATUS and attempt < 2:
                     last_exc = e
-                    await asyncio.sleep(5 * (attempt + 1))  # 5s, 10s
+                    await asyncio.sleep(5 * (attempt + 1))
                 else:
                     raise
         if last_exc:
