@@ -162,35 +162,40 @@ async def fetch_data(req: FetchRequest):
         all_rows: list[dict] = []
         done = 0
         loop = asyncio.get_running_loop()
+        sem = asyncio.Semaphore(MAX_WORKERS)  # 同時実行数を制限
 
-        # Queue でチャンク結果を受け取る（SSE と相性が良い）
-        queue: asyncio.Queue = asyncio.Queue()
+        async def fetch_one(cs: str, ce: str) -> tuple[str, str, list[dict]]:
+            async with sem:
+                rows = await asyncio.wait_for(
+                    loop.run_in_executor(None, _fetch_chunk, cs, ce, req.store_ids),
+                    timeout=90.0,  # 1チャンク最大90秒
+                )
+                return cs, ce, rows
 
-        async def fetch_and_enqueue(cs: str, ce: str):
-            try:
-                rows = await loop.run_in_executor(_executor, _fetch_chunk, cs, ce, req.store_ids)
-                await queue.put((cs, ce, rows, None))
-            except Exception as exc:
-                await queue.put((cs, ce, [], exc))
+        # 全タスクを投入
+        task_map: dict[asyncio.Task, tuple[str, str]] = {
+            asyncio.create_task(fetch_one(cs, ce)): (cs, ce)
+            for cs, ce in chunks
+        }
+        pending = set(task_map.keys())
 
-        # 全チャンクのタスクを起動
-        tasks = [asyncio.create_task(fetch_and_enqueue(cs, ce)) for cs, ce in chunks]
+        # 完了したものから順次 SSE 配信
+        while pending:
+            finished, pending = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in finished:
+                cs, ce = task_map[task]
+                done += 1
+                try:
+                    _, _, chunk_rows = task.result()
+                    all_rows.extend(chunk_rows)
+                except Exception as e:
+                    yield f"data: {json.dumps({'type':'error','message':f'{cs}〜{ce}: {e}'})}\n\n"
 
-        # Queue から結果を順次受け取って SSE 配信
-        for _ in range(total_chunks):
-            cs, ce, chunk_rows, err = await queue.get()
-            done += 1
-            if err:
-                yield f"data: {json.dumps({'type':'error','message':str(err)})}\n\n"
-            else:
-                all_rows.extend(chunk_rows)
-
-            month_label = chunk_month.get((cs, ce), cs[:7])
-            pct = round(done / total_chunks * 100)
-            yield f"data: {json.dumps({'type':'progress','done':done,'total':total_chunks,'rows':len(all_rows),'pct':pct,'month':month_label})}\n\n"
-
-        # 全タスク完了を保証
-        await asyncio.gather(*tasks, return_exceptions=True)
+                month_label = chunk_month.get((cs, ce), cs[:7])
+                pct = round(done / total_chunks * 100)
+                yield f"data: {json.dumps({'type':'progress','done':done,'total':total_chunks,'rows':len(all_rows),'pct':pct,'month':month_label})}\n\n"
 
         if all_rows:
             yield f"data: {json.dumps({'type':'processing','message':'データを整形中…'})}\n\n"
