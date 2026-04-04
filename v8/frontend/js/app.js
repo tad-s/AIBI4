@@ -380,16 +380,24 @@ async function onFetchClick() {
     await api.fetchData(
       sessionId, months, storeIds,
       (done, total, rows, pct, month) => {
-        // メインパネル更新
+        if (done === null) {
+          // processing イベント（整形・LLM サマリー生成中）
+          fpBarFill.style.width = "100%";
+          fpPct.textContent = "100%";
+          fpDetail.textContent = `⏳ ${month}`;
+          fpMonths.querySelectorAll(".fp-month-chip").forEach(c => c.classList.add("active"));
+          progressFill.style.width = "100%";
+          progressText.textContent = month;
+          return;
+        }
+        // progress イベント
         fpBarFill.style.width = `${pct}%`;
         fpPct.textContent = `${pct}%`;
         fpDetail.textContent = `${month} — ${done} / ${total} チャンク完了`;
         fpRows.textContent = `累計 ${rows.toLocaleString()} 件取得`;
-        // アクティブ月チップをハイライト
         fpMonths.querySelectorAll(".fp-month-chip").forEach(c => c.classList.remove("active"));
         const chip = document.getElementById(`fpc-${month}`);
         if (chip) chip.classList.add("active");
-        // サイドバー更新
         progressFill.style.width = `${pct}%`;
         progressText.textContent = `${done}/${total} チャンク完了 (${pct}%)`;
       }

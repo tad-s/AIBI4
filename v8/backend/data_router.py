@@ -173,8 +173,14 @@ async def fetch_data(req: FetchRequest):
                 await asyncio.sleep(0)  # allow event loop to flush
 
         if all_rows:
-            df = _build_df(all_rows)
-            summary = build_data_summary(df)
+            yield f"data: {json.dumps({'type':'processing','message':'データを整形中…'})}\n\n"
+            await asyncio.sleep(0)
+            df = await loop.run_in_executor(None, _build_df, all_rows)
+
+            yield f"data: {json.dumps({'type':'processing','message':'LLM サマリーを生成中…'})}\n\n"
+            await asyncio.sleep(0)
+            summary = await loop.run_in_executor(None, build_data_summary, df)
+
             sess.update_session(req.session_id, df=df, summary_text=summary, chat_history=[])
             yield f"data: {json.dumps({'type':'done','rows':len(df),'columns':list(df.columns)})}\n\n"
         else:
