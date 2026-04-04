@@ -38,6 +38,15 @@ def _get_sb():
         raise HTTPException(status_code=500, detail="SUPABASE_URL / SUPABASE_KEY が未設定です。")
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
+def _make_client():
+    """タイムアウト付きクライアントを生成する。"""
+    try:
+        from supabase import ClientOptions
+        return create_client(SUPABASE_URL, SUPABASE_KEY,
+                             options=ClientOptions(postgrest_client_timeout=45))
+    except Exception:
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+
 
 def _week_ranges(start_date: str, end_date: str) -> list[tuple[str, str]]:
     start = date.fromisoformat(start_date)
@@ -53,7 +62,7 @@ def _week_ranges(start_date: str, end_date: str) -> list[tuple[str, str]]:
 def _fetch_chunk(chunk_start: str, chunk_end: str, store_ids: list[int] | None) -> list[dict]:
     """スレッドごとに独立したクライアントで 1 チャンク取得（リトライ付き）。"""
     import time
-    _client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    _client = _make_client()
     params: dict = {"p_start_date": chunk_start, "p_end_date": chunk_end}
     if store_ids:
         params["p_store_ids"] = store_ids
@@ -137,17 +146,17 @@ async def fetch_data(req: FetchRequest):
         raise HTTPException(status_code=404, detail="セッションが見つかりません。")
 
     from calendar import monthrange
-    starts, ends = [], []
-    for m in req.months:
+    # 選択月ごとにチャンクを生成（月間の空き期間を含まない）
+    chunks: list[tuple[str, str]] = []
+    chunk_month: dict[tuple[str, str], str] = {}
+    for m in sorted(req.months):
         y, mo = int(m.split("-")[0]), int(m.split("-")[1])
-        starts.append(f"{y}-{mo:02d}-01")
-        ends.append(f"{y}-{mo:02d}-{monthrange(y, mo)[1]:02d}")
-    start_date, end_date = min(starts), max(ends)
-    chunks = _week_ranges(start_date, end_date)
+        m_start = f"{y}-{mo:02d}-01"
+        m_end   = f"{y}-{mo:02d}-{monthrange(y, mo)[1]:02d}"
+        for cs, ce in _week_ranges(m_start, m_end):
+            chunks.append((cs, ce))
+            chunk_month[(cs, ce)] = m
     total_chunks = len(chunks)
-
-    # チャンクの月ラベルを事前に計算（開始日の YYYY-MM）
-    chunk_month = {(cs, ce): cs[:7] for cs, ce in chunks}
 
     async def _fetch_async(cs: str, ce: str) -> tuple[str, str, list[dict]]:
         loop = asyncio.get_running_loop()
