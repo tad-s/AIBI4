@@ -72,7 +72,7 @@ export function fetchData(sid, months, storeIds, onProgress) {
               const ev = JSON.parse(line);
               if (ev.type === "progress")    onProgress(ev.done, ev.total, ev.rows, ev.pct, ev.month ?? "");
               if (ev.type === "processing")  onProgress(null, null, null, 100, ev.message);
-              if (ev.type === "error")       reject(new Error(ev.message));
+              if (ev.type === "error")       console.warn("chunk error:", ev.message); // 個別エラーは無視して継続
               if (ev.type === "done")        resolve(ev);
             } catch {}
           }

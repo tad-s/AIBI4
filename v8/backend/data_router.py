@@ -56,7 +56,7 @@ async def _fetch_chunk_async(
     chunk_end: str,
     store_ids: list[int] | None,
 ) -> list[dict]:
-    """httpx.AsyncClient で 1 チャンクを非同期取得（ページネーション付き）。"""
+    """httpx.AsyncClient で 1 チャンクを非同期取得（ページネーション + リトライ付き）。"""
     params: dict = {"p_start_date": chunk_start, "p_end_date": chunk_end}
     if store_ids:
         params["p_store_ids"] = store_ids
@@ -64,12 +64,34 @@ async def _fetch_chunk_async(
     rows: list[dict] = []
     offset = 0
     while True:
-        resp = await client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/get_izakaya_sales",
-            json=params,
-            headers={**_sb_headers(), "Range": f"{offset}-{offset + RPC_PAGE_SIZE - 1}"},
-        )
-        resp.raise_for_status()
+        # リトライ最大3回
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                resp = await client.post(
+                    f"{SUPABASE_URL}/rest/v1/rpc/get_izakaya_sales",
+                    json=params,
+                    headers={
+                        **_sb_headers(),
+                        "Range": f"{offset}-{offset + RPC_PAGE_SIZE - 1}",
+                        "Prefer": "return=representation",
+                    },
+                )
+                # 416 = データなし / ページ外
+                if resp.status_code == 416:
+                    return rows
+                resp.raise_for_status()
+                last_exc = None
+                break
+            except (httpx.TimeoutException, httpx.NetworkError) as e:
+                last_exc = e
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
+            except httpx.HTTPStatusError as e:
+                raise  # 4xx/5xx はリトライしない
+        if last_exc:
+            raise last_exc
+
         page = resp.json()
         if not isinstance(page, list):
             break
