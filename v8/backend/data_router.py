@@ -25,9 +25,10 @@ router = APIRouter()
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 CHUNK_DAYS    = 3
-MAX_WORKERS   = 3          # 同時並列数（Supabase 負荷を抑える）
+MAX_WORKERS   = 1          # Supabase 無料プランは同時接続を絞る
 RPC_PAGE_SIZE = 1000
 CHUNK_TIMEOUT = 120.0      # 1チャンク最大120秒（httpx レベルで切断）
+_RETRY_STATUS = {502, 503, 504}  # 一時的なサーバーエラーはリトライ
 
 
 def _sb_headers() -> dict:
@@ -86,9 +87,13 @@ async def _fetch_chunk_async(
             except (httpx.TimeoutException, httpx.NetworkError) as e:
                 last_exc = e
                 if attempt < 2:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(3 ** attempt)
             except httpx.HTTPStatusError as e:
-                raise  # 4xx/5xx はリトライしない
+                if e.response.status_code in _RETRY_STATUS and attempt < 2:
+                    last_exc = e
+                    await asyncio.sleep(5 * (attempt + 1))  # 5s, 10s
+                else:
+                    raise
         if last_exc:
             raise last_exc
 
