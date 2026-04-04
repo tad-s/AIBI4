@@ -158,32 +158,40 @@ async def fetch_data(req: FetchRequest):
             chunk_month[(cs, ce)] = m
     total_chunks = len(chunks)
 
-    async def _fetch_async(cs: str, ce: str) -> tuple[str, str, list[dict]]:
-        loop = asyncio.get_running_loop()
-        rows = await loop.run_in_executor(_executor, _fetch_chunk, cs, ce, req.store_ids)
-        return cs, ce, rows
-
     async def event_stream():
         all_rows: list[dict] = []
         done = 0
+        loop = asyncio.get_running_loop()
 
-        tasks = [asyncio.ensure_future(_fetch_async(cs, ce)) for cs, ce in chunks]
+        # Queue でチャンク結果を受け取る（SSE と相性が良い）
+        queue: asyncio.Queue = asyncio.Queue()
 
-        for coro in asyncio.as_completed(tasks):
+        async def fetch_and_enqueue(cs: str, ce: str):
             try:
-                cs, ce, chunk_rows = await coro
-                all_rows.extend(chunk_rows)
-            except Exception as e:
-                done += 1
-                yield f"data: {json.dumps({'type':'error','message':str(e)})}\n\n"
-                continue
+                rows = await loop.run_in_executor(_executor, _fetch_chunk, cs, ce, req.store_ids)
+                await queue.put((cs, ce, rows, None))
+            except Exception as exc:
+                await queue.put((cs, ce, [], exc))
 
+        # 全チャンクのタスクを起動
+        tasks = [asyncio.create_task(fetch_and_enqueue(cs, ce)) for cs, ce in chunks]
+
+        # Queue から結果を順次受け取って SSE 配信
+        for _ in range(total_chunks):
+            cs, ce, chunk_rows, err = await queue.get()
             done += 1
+            if err:
+                yield f"data: {json.dumps({'type':'error','message':str(err)})}\n\n"
+            else:
+                all_rows.extend(chunk_rows)
+
             month_label = chunk_month.get((cs, ce), cs[:7])
             pct = round(done / total_chunks * 100)
             yield f"data: {json.dumps({'type':'progress','done':done,'total':total_chunks,'rows':len(all_rows),'pct':pct,'month':month_label})}\n\n"
 
-        loop = asyncio.get_running_loop()
+        # 全タスク完了を保証
+        await asyncio.gather(*tasks, return_exceptions=True)
+
         if all_rows:
             yield f"data: {json.dumps({'type':'processing','message':'データを整形中…'})}\n\n"
             df = await loop.run_in_executor(None, _build_df, all_rows)
