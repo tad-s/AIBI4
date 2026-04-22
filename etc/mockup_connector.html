@@ -1,0 +1,2152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DataBridge AI — コネクタ & データ設計</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* ── Claude Design palette ── */
+      --bg:          #F5F4F0;
+      --bg2:         #EEECEA;
+      --surface:     #FFFFFF;
+      --surface2:    #F9F8F6;
+      --surface3:    #F0EEEb;
+      --border:      #E5E3DE;
+      --border-hi:   #CBC8C0;
+
+      --accent:      #5C4EE5;   /* Claude purple */
+      --accent-soft: #EDE9FF;
+      --accent2:     #9B8AFF;
+      --coral:       #D97B5A;
+      --coral-soft:  #FFF0EB;
+      --success:     #1D8A5A;
+      --success-soft:#E6F6EF;
+      --warn:        #C47B00;
+      --warn-soft:   #FFF8E6;
+      --danger:      #C93B3B;
+      --danger-soft: #FDEAEA;
+      --info:        #1A7FBF;
+      --info-soft:   #E6F3FC;
+
+      --text:        #1A1825;
+      --text-sub:    #4A4760;
+      --text-muted:  #8C89A0;
+
+      --radius-xs:   4px;
+      --radius-sm:   8px;
+      --radius:      12px;
+      --radius-lg:   16px;
+      --radius-xl:   20px;
+
+      --shadow-xs:   0 1px 3px rgba(0,0,0,.06);
+      --shadow-sm:   0 2px 8px rgba(0,0,0,.08);
+      --shadow:      0 4px 16px rgba(0,0,0,.10);
+      --shadow-lg:   0 8px 30px rgba(0,0,0,.13);
+
+      --nav-w:       60px;
+      --transition:  .16s ease;
+
+      font-family: 'Segoe UI', 'Noto Sans JP', system-ui, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); }
+    body { display: flex; }
+
+    /* ========================
+       ICON NAV
+       ======================== */
+    #icon-nav {
+      width: var(--nav-w); min-width: var(--nav-w);
+      height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; align-items: center;
+      padding: 12px 0; gap: 2px;
+      box-shadow: var(--shadow-xs);
+      z-index: 20;
+    }
+    .nav-logo {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 900; color: #fff;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(92,78,229,.3);
+      letter-spacing: -1px;
+    }
+    .nav-item {
+      width: 40px; height: 40px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; cursor: pointer; color: var(--text-muted);
+      transition: var(--transition);
+    }
+    .nav-item:hover { background: var(--bg2); color: var(--text-sub); }
+    .nav-item.active { background: var(--accent-soft); color: var(--accent); }
+    .nav-spacer { flex: 1; }
+    .nav-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--coral), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #fff; cursor: pointer;
+    }
+
+    /* ========================
+       MAIN
+       ======================== */
+    #main { flex: 1; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* TOP BAR */
+    #topbar {
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 20px; gap: 2px;
+      flex-shrink: 0;
+      box-shadow: var(--shadow-xs);
+    }
+    .tb-tab {
+      display: flex; align-items: center; gap: 6px;
+      height: 52px; padding: 0 14px;
+      border-bottom: 2px solid transparent;
+      font-size: 12px; font-weight: 600; color: var(--text-muted);
+      cursor: pointer; transition: var(--transition); white-space: nowrap;
+    }
+    .tb-tab:hover { color: var(--text-sub); background: var(--bg2); }
+    .tb-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-count {
+      background: var(--bg2); color: var(--text-muted);
+      border-radius: 99px; font-size: 10px; padding: 1px 6px; font-weight: 700;
+    }
+    .tb-tab.active .tab-count { background: var(--accent-soft); color: var(--accent); }
+    .tb-spacer { flex: 1; }
+    .tb-pill {
+      display: flex; align-items: center; gap: 5px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 99px; padding: 5px 11px;
+      font-size: 11px; color: var(--text-sub); cursor: pointer;
+      transition: var(--transition);
+    }
+    .tb-pill:hover { border-color: var(--border-hi); }
+    .tb-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+    .tb-btn {
+      border: none; border-radius: var(--radius-sm);
+      padding: 7px 14px; font-size: 12px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 5px;
+      transition: var(--transition);
+    }
+    .tb-btn.primary { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(92,78,229,.25); }
+    .tb-btn.primary:hover { background: #4A3EC8; }
+    .tb-btn.ghost { background: transparent; border: 1px solid var(--border-hi); color: var(--text-sub); }
+    .tb-btn.ghost:hover { background: var(--bg2); }
+
+    /* ========================
+       PAGE VIEWS
+       ======================== */
+    .page-view { display: none; flex: 1; overflow-y: auto; padding: 24px; }
+    .page-view.active { display: flex; flex-direction: column; gap: 24px; }
+    .page-view::-webkit-scrollbar { width: 6px; }
+    .page-view::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 99px; }
+
+    .section-title {
+      font-size: 13px; font-weight: 700; color: var(--text);
+      display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+    }
+    .section-title small { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+
+    /* ========================
+       CONNECTOR CATALOG
+       ======================== */
+    .cat-filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+    .cat-chip {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 99px; padding: 5px 13px;
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      cursor: pointer; transition: var(--transition);
+      box-shadow: var(--shadow-xs);
+    }
+    .cat-chip:hover { border-color: var(--accent); color: var(--accent); }
+    .cat-chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+    .connector-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+      gap: 12px;
+    }
+    .conn-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 15px 14px;
+      cursor: pointer; transition: var(--transition);
+      display: flex; flex-direction: column; gap: 8px;
+      position: relative; overflow: hidden;
+      box-shadow: var(--shadow-xs);
+    }
+    .conn-card:hover {
+      border-color: var(--accent);
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+    .conn-card.connected { border-color: #B8F0D8; }
+    .conn-card.connected:hover { border-color: var(--success); }
+    .conn-card.has-error { border-color: #FBCFCF; }
+    .conn-card.has-error:hover { border-color: var(--danger); }
+
+    .status-dot {
+      position: absolute; top: 12px; right: 12px;
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .status-dot.live { background: var(--success); box-shadow: 0 0 0 2px var(--success-soft); }
+    .status-dot.err  { background: var(--warn);    box-shadow: 0 0 0 2px var(--warn-soft); }
+
+    .conn-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center; font-size: 22px;
+    }
+    .conn-name { font-size: 13px; font-weight: 700; color: var(--text); }
+    .conn-desc { font-size: 10px; color: var(--text-muted); line-height: 1.5; }
+    .conn-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
+    .conn-tag {
+      font-size: 9px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+      border-radius: 99px; padding: 2px 8px;
+    }
+    .tag-live  { background: var(--success-soft); color: var(--success); }
+    .tag-warn  { background: var(--warn-soft);    color: var(--warn); }
+    .tag-free  { background: var(--accent-soft);  color: var(--accent); }
+    .tag-none  { background: var(--bg2);          color: var(--text-muted); }
+    .conn-action {
+      font-size: 10px; font-weight: 700;
+      color: var(--text-muted); border: 1px solid var(--border);
+      border-radius: 99px; padding: 2px 9px; cursor: pointer;
+      transition: var(--transition);
+    }
+    .conn-card.connected .conn-action { color: var(--success); border-color: #B8F0D8; }
+    .conn-card.connected .conn-action:hover { background: var(--success-soft); }
+    .conn-card:not(.connected) .conn-action:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* icon backgrounds */
+    .ic-sf  { background: #E3F4FD; }
+    .ic-hs  { background: #FFF0EB; }
+    .ic-ga  { background: #FFF8E1; }
+    .ic-sp  { background: #F0FAE8; }
+    .ic-st  { background: #EEF0FF; }
+    .ic-sl  { background: #F9E8FF; }
+    .ic-nt  { background: var(--bg2); }
+    .ic-bq  { background: #E8F0FE; }
+    .ic-pg  { background: #E6EEF5; }
+    .ic-my  { background: #E6F5F5; }
+    .ic-re  { background: #F0EEFF; }
+    .ic-gs  { background: #E8F5E9; }
+    .ic-kn  { background: #FFF3E0; }
+    .ic-fx  { background: #E3F8FB; }
+    .ic-aws { background: #FFF3E0; }
+    .ic-rs  { background: #FDECEA; }
+    .ic-ora { background: #FDECEA; }
+    .ic-az  { background: #E3F0FD; }
+    .ic-azs { background: #EDE8FF; }
+    .ic-add { background: var(--bg2); border: 1.5px dashed var(--border-hi); }
+
+    /* ========================
+       DASHBOARD VIEW
+       ======================== */
+    .page-header { display: flex; align-items: flex-start; gap: 12px; }
+    .page-header-text h1 { font-size: 20px; font-weight: 800; letter-spacing: -.4px; color: var(--text); }
+    .page-header-text h1 span { color: var(--accent); }
+    .page-header-text p { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .period-selector {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); padding: 7px 13px;
+      font-size: 12px; font-weight: 600; color: var(--text-sub);
+      cursor: pointer; box-shadow: var(--shadow-xs); transition: var(--transition); flex-shrink: 0;
+    }
+    .period-selector:hover { border-color: var(--accent); color: var(--accent); }
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .kpi-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 5px;
+      position: relative; overflow: hidden;
+      box-shadow: var(--shadow-xs); transition: var(--transition);
+    }
+    .kpi-card:hover { box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+    .kpi-card::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+    .kpi-card.k1::after { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+    .kpi-card.k2::after { background: linear-gradient(90deg, var(--success), var(--info)); }
+    .kpi-card.k3::after { background: linear-gradient(90deg, var(--warn), var(--coral)); }
+    .kpi-card.k4::after { background: linear-gradient(90deg, var(--accent2), var(--coral)); }
+    .kpi-source { font-size: 9px; color: var(--text-muted); font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
+    .kpi-label { font-size: 11px; color: var(--text-sub); }
+    .kpi-val { font-size: 26px; font-weight: 800; letter-spacing: -1px; color: var(--text); }
+    .kpi-delta { font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 3px; }
+    .kpi-delta.up   { color: var(--success); }
+    .kpi-delta.down { color: var(--danger); }
+    .chart-insight-row { display: grid; grid-template-columns: 1fr 330px; gap: 14px; }
+    .panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 16px 18px; box-shadow: var(--shadow-xs);
+    }
+    .panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+    .panel-title { font-size: 13px; font-weight: 700; flex: 1; color: var(--text); }
+    .panel-source-tag {
+      font-size: 9px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+      background: var(--bg2); color: var(--text-muted); border-radius: 99px; padding: 2px 9px;
+    }
+    .chart-area { height: 195px; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface2); }
+    .chart-svg { width: 100%; height: 100%; }
+    .chart-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 10px; color: var(--text-muted); }
+    .chart-legend span { display: flex; align-items: center; gap: 5px; }
+    .legend-line { width: 18px; height: 2.5px; border-radius: 2px; display: inline-block; }
+    .insight-panel { display: flex; flex-direction: column; gap: 10px; }
+    .insight-msg {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm) var(--radius-sm) var(--radius-sm) 3px;
+      padding: 11px 13px; font-size: 12px; line-height: 1.65; color: var(--text-sub);
+    }
+    .ai-tag { font-size: 9px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 4px; }
+    .ai-hi { color: var(--text); font-weight: 600; }
+    .insight-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+    .insight-chip {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 99px; padding: 4px 11px; font-size: 11px; color: var(--text-sub);
+      cursor: pointer; transition: var(--transition); box-shadow: var(--shadow-xs);
+    }
+    .insight-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+    .insight-input-wrap { display: flex; gap: 6px; margin-top: auto; }
+    .insight-input {
+      flex: 1; background: var(--bg2); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); padding: 8px 11px;
+      font-size: 12px; color: var(--text); outline: none; transition: var(--transition);
+    }
+    .insight-input:focus { border-color: var(--accent); background: var(--accent-soft); }
+    .insight-input::placeholder { color: var(--text-muted); }
+    .insight-send {
+      width: 34px; height: 34px; background: var(--accent); border: none;
+      border-radius: var(--radius-sm); color: #fff; font-size: 15px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 6px rgba(92,78,229,.25); transition: var(--transition);
+    }
+    .insight-send:hover { background: #4A3EC8; }
+    .pipeline-row {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 16px 20px;
+      display: flex; align-items: center; overflow-x: auto; box-shadow: var(--shadow-xs);
+    }
+    .pipe-step { display: flex; align-items: center; flex-shrink: 0; }
+    .pipe-node { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 72px; }
+    .pipe-icon-wrap {
+      width: 42px; height: 42px; border-radius: 11px;
+      display: flex; align-items: center; justify-content: center; font-size: 19px;
+      border: 1.5px solid var(--border); background: var(--surface2);
+      position: relative; box-shadow: var(--shadow-xs);
+    }
+    .pipe-active-ring {
+      position: absolute; inset: -4px; border: 2px solid var(--accent); border-radius: 14px;
+      animation: pulse-ring 2.2s infinite;
+    }
+    @keyframes pulse-ring {
+      0%,100% { opacity:.4; transform:scale(1); }
+      50%      { opacity:.9; transform:scale(1.05); }
+    }
+    .pipe-label { font-size: 9px; color: var(--text-muted); font-weight: 600; text-align: center; }
+    .pipe-arrow { color: var(--border-hi); font-size: 18px; padding: 0 6px; flex-shrink: 0; }
+    .pipe-info {
+      margin-left: 18px; padding-left: 18px;
+      border-left: 1px solid var(--border); flex: 1; min-width: 190px;
+    }
+    .pipe-info-title { font-size: 11px; font-weight: 700; color: var(--text); }
+    .pipe-info-sub { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
+    .pipe-run-btn {
+      background: var(--accent-soft); border: 1.5px solid rgba(92,78,229,.25);
+      border-radius: var(--radius-sm); color: var(--accent);
+      font-size: 11px; font-weight: 700; padding: 6px 14px;
+      cursor: pointer; margin-left: auto; flex-shrink: 0; transition: var(--transition);
+    }
+    .pipe-run-btn:hover { background: var(--accent); color: #fff; }
+
+    /* ========================
+       FILE UPLOAD
+       ======================== */
+    .upload-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .upload-card {
+      background: var(--surface);
+      border: 1.5px dashed var(--border-hi);
+      border-radius: var(--radius-lg);
+      padding: 28px 18px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      cursor: pointer; transition: var(--transition); text-align: center;
+    }
+    .upload-card:hover {
+      border-color: var(--accent); background: var(--accent-soft);
+      box-shadow: var(--shadow-sm);
+    }
+    .u-icon { font-size: 32px; }
+    .u-label { font-size: 13px; font-weight: 700; color: var(--text); }
+    .u-hint { font-size: 10px; color: var(--text-muted); line-height: 1.6; }
+    .u-exts { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+    .u-ext {
+      background: var(--bg2); color: var(--text-muted);
+      border-radius: var(--radius-xs); font-size: 9px; font-weight: 700;
+      padding: 2px 6px;
+    }
+
+    .recent-list { display: flex; flex-direction: column; gap: 8px; }
+    .recent-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 11px 16px;
+      display: flex; align-items: center; gap: 14px;
+      box-shadow: var(--shadow-xs);
+      transition: var(--transition);
+    }
+    .recent-item:hover { box-shadow: var(--shadow-sm); border-color: var(--border-hi); }
+    .recent-icon { font-size: 22px; flex-shrink: 0; }
+    .recent-info { flex: 1; min-width: 0; }
+    .recent-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .recent-meta { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+    .recent-status { font-size: 10px; font-weight: 700; border-radius: 99px; padding: 3px 10px; }
+    .rs-ok   { background: var(--success-soft); color: var(--success); }
+    .rs-proc { background: var(--accent-soft);  color: var(--accent); }
+    .rs-err  { background: var(--danger-soft);  color: var(--danger); }
+    .recent-action {
+      background: var(--accent-soft); border: 1px solid rgba(92,78,229,.2);
+      border-radius: var(--radius-sm); color: var(--accent);
+      font-size: 11px; font-weight: 600; padding: 5px 12px;
+      cursor: pointer; transition: var(--transition); white-space: nowrap;
+    }
+    .recent-action:hover { background: var(--accent); color: #fff; }
+
+    /* ========================
+       DATA DESIGN PAGE
+       ======================== */
+    .schema-topbar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 14px 20px;
+      display: flex; align-items: center; gap: 14px;
+      box-shadow: var(--shadow-xs);
+    }
+    .schema-source-badge {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg2); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); padding: 6px 12px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      color: var(--text);
+      transition: var(--transition);
+    }
+    .schema-source-badge:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+    .src-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+    .schema-summary { font-size: 11px; color: var(--text-muted); }
+    .schema-summary b { color: var(--text-sub); font-weight: 700; }
+    .schema-spacer { flex: 1; }
+    .field-search {
+      background: var(--surface2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 7px 10px 7px 30px;
+      font-size: 12px; color: var(--text);
+      outline: none; width: 210px;
+      transition: var(--transition);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%238C89A0' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: 9px center;
+    }
+    .field-search:focus { border-color: var(--accent); outline: none; }
+    .field-search::placeholder { color: var(--text-muted); }
+    .schema-save-btn {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: var(--radius-sm); padding: 8px 18px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      box-shadow: 0 2px 8px rgba(92,78,229,.25);
+      display: flex; align-items: center; gap: 5px;
+      transition: var(--transition);
+    }
+    .schema-save-btn:hover { background: #4A3EC8; }
+
+    /* bulk bar */
+    .bulk-bar {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 9px 16px; flex-wrap: wrap;
+    }
+    .bulk-bar-label { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-right: 4px; }
+    .bulk-btn {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 4px 11px;
+      font-size: 11px; font-weight: 600; color: var(--text-sub);
+      cursor: pointer; transition: var(--transition);
+      box-shadow: var(--shadow-xs);
+    }
+    .bulk-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+    .bulk-btn.danger:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+    .bulk-hint { margin-left: auto; font-size: 10px; color: var(--text-muted); }
+
+    /* stats panel */
+    .preview-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      box-shadow: var(--shadow-xs);
+    }
+    .pv-head {
+      font-size: 12px; font-weight: 700; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px; color: var(--text);
+    }
+    .pv-head small { font-size: 10px; font-weight: 400; color: var(--text-muted); }
+    .preview-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+    .pv-stat {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 11px 14px;
+    }
+    .pv-stat-label { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+    .pv-stat-val { font-size: 18px; font-weight: 800; color: var(--text); }
+
+    /* field table */
+    .field-table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-xs);
+    }
+    .ft-head {
+      display: grid;
+      grid-template-columns: 40px 1fr 150px 130px 100px 1fr 40px;
+      padding: 10px 18px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      font-size: 10px; font-weight: 700; letter-spacing: .7px;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .ft-head > * { display: flex; align-items: center; }
+    .ft-body { display: flex; flex-direction: column; }
+    .ft-row {
+      display: grid;
+      grid-template-columns: 40px 1fr 150px 130px 100px 1fr 40px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+      min-height: 48px;
+      transition: var(--transition);
+    }
+    .ft-row:last-child { border-bottom: none; }
+    .ft-row:hover { background: var(--surface2); }
+    .ft-row.disabled { opacity: .45; }
+    .ft-row > * { display: flex; align-items: center; padding: 8px 5px; }
+
+    /* toggle */
+    .toggle {
+      width: 30px; height: 17px;
+      background: var(--border-hi); border-radius: 99px;
+      cursor: pointer; position: relative; transition: var(--transition); flex-shrink: 0;
+    }
+    .toggle.on { background: var(--accent); }
+    .toggle::after {
+      content: ''; position: absolute;
+      width: 13px; height: 13px; border-radius: 50%;
+      background: #fff; top: 2px; left: 2px;
+      transition: var(--transition);
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    .toggle.on::after { left: 15px; }
+
+    .orig-name {
+      font-size: 11.5px; color: var(--text-muted);
+      font-family: 'Consolas','Monaco',monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .field-edit {
+      background: transparent; border: 1.5px solid transparent;
+      border-radius: var(--radius-sm); padding: 4px 8px;
+      font-size: 12px; font-weight: 600; color: var(--text);
+      outline: none; width: 100%; transition: var(--transition);
+    }
+    .field-edit:hover { border-color: var(--border-hi); background: var(--bg2); }
+    .field-edit:focus { border-color: var(--accent); background: var(--accent-soft); }
+    .field-edit.edited { color: var(--accent); }
+
+    .type-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      border-radius: 99px; padding: 3px 10px;
+      font-size: 10px; font-weight: 700;
+    }
+    .tb-num  { background: #EEF0FF; color: #4040CC; }
+    .tb-str  { background: var(--success-soft); color: var(--success); }
+    .tb-dt   { background: var(--warn-soft);    color: var(--warn); }
+    .tb-bool { background: #F0E8FF; color: #7040CC; }
+    .tb-json { background: var(--info-soft);    color: var(--info); }
+
+    .sample-val {
+      font-size: 10.5px; color: var(--text-muted);
+      font-family: 'Consolas','Monaco',monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .key-icon { font-size: 14px; color: var(--warn); }
+    .row-action { font-size: 14px; color: var(--text-muted); cursor: pointer; opacity: .4; transition: var(--transition); }
+    .row-action:hover { opacity: 1; color: var(--danger); }
+
+    .spacer-end { height: 32px; }
+
+    /* ========================
+       NEW CONNECTOR MODAL
+       ======================== */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(26,24,37,.45);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      width: 560px; max-width: 96vw;
+      max-height: 90vh;
+      display: flex; flex-direction: column;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+    }
+    .modal-head {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .modal-head-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: var(--accent-soft);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .modal-head-text { flex: 1; }
+    .modal-title { font-size: 15px; font-weight: 800; color: var(--text); }
+    .modal-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .modal-close {
+      width: 30px; height: 30px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; color: var(--text-muted); cursor: pointer;
+      transition: var(--transition);
+    }
+    .modal-close:hover { background: var(--bg2); color: var(--text); }
+
+    .modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 18px; }
+    .modal-body::-webkit-scrollbar { width: 5px; }
+    .modal-body::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 99px; }
+
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-label {
+      font-size: 11px; font-weight: 700; color: var(--text-sub);
+      letter-spacing: .4px;
+    }
+    .form-label span { color: var(--danger); margin-left: 2px; }
+    .form-input {
+      background: var(--surface2); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); padding: 8px 12px;
+      font-size: 12px; color: var(--text); outline: none;
+      transition: var(--transition); width: 100%;
+    }
+    .form-input:focus { border-color: var(--accent); background: var(--accent-soft); }
+    .form-input::placeholder { color: var(--text-muted); }
+    .form-select {
+      background: var(--surface2); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); padding: 8px 12px;
+      font-size: 12px; color: var(--text); outline: none;
+      transition: var(--transition); width: 100%;
+      cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238C89A0' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+    }
+    .form-select:focus { border-color: var(--accent); }
+
+    .form-hint { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+    .auth-section {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .auth-section-title {
+      font-size: 11px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .6px;
+    }
+
+    /* custom fields */
+    .custom-fields-area { display: flex; flex-direction: column; gap: 6px; }
+    .custom-field-row {
+      display: grid; grid-template-columns: 1fr 1fr 1fr 30px;
+      gap: 6px; align-items: center;
+    }
+    .custom-field-row .form-input { padding: 6px 10px; font-size: 11px; }
+    .cf-remove {
+      width: 28px; height: 28px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; color: var(--text-muted); cursor: pointer;
+      transition: var(--transition); border: 1px solid transparent;
+    }
+    .cf-remove:hover { background: var(--danger-soft); border-color: rgba(201,59,59,.2); color: var(--danger); }
+    .cf-header {
+      display: grid; grid-template-columns: 1fr 1fr 1fr 30px;
+      gap: 6px; padding: 0 0 4px;
+    }
+    .cf-header span { font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: .4px; }
+    .add-field-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: transparent; border: 1.5px dashed var(--border-hi);
+      border-radius: var(--radius-sm); padding: 7px 12px;
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      cursor: pointer; transition: var(--transition); width: 100%;
+    }
+    .add-field-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+    .modal-footer {
+      padding: 14px 24px;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .test-conn-btn {
+      background: var(--surface2); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); padding: 8px 16px;
+      font-size: 12px; font-weight: 600; color: var(--text-sub);
+      cursor: pointer; transition: var(--transition);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .test-conn-btn:hover { border-color: var(--success); color: var(--success); background: var(--success-soft); }
+    .test-result {
+      font-size: 11px; font-weight: 600;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .test-result.ok   { color: var(--success); }
+    .test-result.fail { color: var(--danger); }
+    .modal-spacer { flex: 1; }
+    .modal-cancel {
+      background: transparent; border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); padding: 8px 16px;
+      font-size: 12px; font-weight: 600; color: var(--text-sub);
+      cursor: pointer; transition: var(--transition);
+    }
+    .modal-cancel:hover { background: var(--bg2); }
+    .modal-save {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: var(--radius-sm); padding: 8px 20px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      box-shadow: 0 2px 8px rgba(92,78,229,.25);
+      transition: var(--transition);
+    }
+    .modal-save:hover { background: #4A3EC8; }
+
+    /* auth type tabs */
+    .auth-tabs { display: flex; gap: 4px; }
+    .auth-tab {
+      padding: 4px 12px; border-radius: 99px;
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      cursor: pointer; transition: var(--transition);
+      border: 1px solid transparent;
+    }
+    .auth-tab:hover { background: var(--surface); }
+    .auth-tab.active { background: var(--surface); border-color: var(--border); color: var(--accent); }
+
+    /* section divider */
+    .form-divider {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 10px; font-weight: 700; color: var(--text-muted);
+      letter-spacing: .6px; text-transform: uppercase;
+    }
+    .form-divider::before, .form-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ====== ICON NAV ====== -->
+<nav id="icon-nav">
+  <div class="nav-logo">DB</div>
+  <div class="nav-item" title="ダッシュボード" onclick="switchPage('dashboard')" id="nav-dashboard">📊</div>
+  <div class="nav-item active" title="コネクタ / データ取込" onclick="switchTab('connectors')" id="nav-connectors">🔌</div>
+  <div class="nav-item" title="データ設計" onclick="switchTab('schema')" id="nav-schema">🗂️</div>
+  <div class="nav-item" title="AI アシスタント" onclick="switchPage('ai')" id="nav-ai">🤖</div>
+  <div class="nav-item" title="レポート" onclick="switchPage('reports')" id="nav-reports">📋</div>
+  <div class="nav-item" title="設定" onclick="switchPage('settings')" id="nav-settings">⚙️</div>
+  <div class="nav-spacer"></div>
+  <div class="nav-avatar">T</div>
+</nav>
+
+<!-- ====== MAIN ====== -->
+<div id="main">
+
+  <div id="topbar">
+    <div class="tb-tab active" onclick="switchTab('connectors')" id="tab-connectors">
+      🔌 コネクタ <span class="tab-count">18</span>
+    </div>
+    <div class="tb-tab" onclick="switchTab('files')" id="tab-files">
+      📂 ファイル取り込み <span class="tab-count">3</span>
+    </div>
+    <div class="tb-tab" onclick="switchTab('schema')" id="tab-schema">
+      🗂️ データ設計 <span class="tab-count">20</span>
+    </div>
+    <div class="tb-spacer"></div>
+    <div class="tb-pill"><span class="dot"></span> 14 ソース同期中</div>
+    <button class="tb-btn ghost">🔄 今すぐ同期</button>
+    <button class="tb-btn primary">＋ ソース追加</button>
+  </div>
+
+  <!-- ============================  DASHBOARD  ============================ -->
+  <div class="page-view" id="page-dashboard">
+
+    <div class="page-header">
+      <div class="page-header-text">
+        <h1>統合ビジネスダッシュボード <span>AI</span></h1>
+        <p>Salesforce · HubSpot · GA4 · Shopify · Stripe · Slack · AWS RDS · Oracle · Azure Synapse · MySQL · CSV ほか 20 ソースを横断分析</p>
+      </div>
+      <div style="flex:1"></div>
+      <div class="period-selector">📅 2026年 1月〜3月 ▾</div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi-card k1">
+        <div class="kpi-source">Salesforce + Shopify</div>
+        <div class="kpi-label">総売上</div>
+        <div class="kpi-val">¥184.2M</div>
+        <div class="kpi-delta up">↑ 12.4% 前期比</div>
+      </div>
+      <div class="kpi-card k2">
+        <div class="kpi-source">GA4 + HubSpot</div>
+        <div class="kpi-label">新規リード</div>
+        <div class="kpi-val">3,847</div>
+        <div class="kpi-delta up">↑ 8.1% 前期比</div>
+      </div>
+      <div class="kpi-card k3">
+        <div class="kpi-source">Stripe</div>
+        <div class="kpi-label">MRR</div>
+        <div class="kpi-val">¥12.6M</div>
+        <div class="kpi-delta down">↓ 2.3% 前期比</div>
+      </div>
+      <div class="kpi-card k4">
+        <div class="kpi-source">GA4</div>
+        <div class="kpi-label">月間セッション</div>
+        <div class="kpi-val">248K</div>
+        <div class="kpi-delta up">↑ 31.2% 前期比</div>
+      </div>
+    </div>
+
+    <div class="chart-insight-row">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">クロスソース 月次売上トレンド</div>
+          <div class="panel-source-tag">Salesforce + Shopify + Stripe</div>
+        </div>
+        <div class="chart-area">
+          <svg class="chart-svg" viewBox="0 0 700 195" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="dg1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#5C4EE5" stop-opacity=".18"/>
+                <stop offset="100%" stop-color="#5C4EE5" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="dg2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#1D8A5A" stop-opacity=".14"/>
+                <stop offset="100%" stop-color="#1D8A5A" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <line x1="0" y1="50"  x2="700" y2="50"  stroke="#E5E3DE" stroke-width="1"/>
+            <line x1="0" y1="100" x2="700" y2="100" stroke="#E5E3DE" stroke-width="1"/>
+            <line x1="0" y1="148" x2="700" y2="148" stroke="#E5E3DE" stroke-width="1"/>
+            <path d="M0,148 C80,138 160,128 233,118 C316,106 380,94 466,84 C550,74 620,68 700,57 L700,195 L0,195 Z" fill="url(#dg2)"/>
+            <path d="M0,138 C80,126 160,108 233,94 C316,80 380,64 466,58 C550,52 620,44 700,36 L700,195 L0,195 Z" fill="url(#dg1)"/>
+            <path d="M0,148 C80,138 160,128 233,118 C316,106 380,94 466,84 C550,74 620,68 700,57" fill="none" stroke="#1D8A5A" stroke-width="2"/>
+            <path d="M0,138 C80,126 160,108 233,94 C316,80 380,64 466,58 C550,52 620,44 700,36" fill="none" stroke="#5C4EE5" stroke-width="2.5"/>
+            <circle cx="233" cy="94" r="4" fill="#5C4EE5" stroke="#fff" stroke-width="2"/>
+            <circle cx="466" cy="58" r="4" fill="#5C4EE5" stroke="#fff" stroke-width="2"/>
+            <circle cx="700" cy="36" r="5" fill="#5C4EE5" stroke="#fff" stroke-width="2.5"/>
+            <text x="238" y="88" font-size="9" fill="#5C4EE5" font-family="sans-serif">¥58M</text>
+            <text x="471" y="52" font-size="9" fill="#5C4EE5" font-family="sans-serif">¥71M</text>
+            <text x="635" y="30" font-size="9" fill="#5C4EE5" font-family="sans-serif">¥84M</text>
+          </svg>
+        </div>
+        <div class="chart-legend">
+          <span><span class="legend-line" style="background:#5C4EE5"></span>Salesforce + Stripe</span>
+          <span><span class="legend-line" style="background:#1D8A5A"></span>Shopify</span>
+        </div>
+      </div>
+      <div class="panel insight-panel">
+        <div class="panel-head">
+          <div class="panel-title">🤖 AI インサイト</div>
+          <div class="panel-source-tag">全ソース横断</div>
+        </div>
+        <div class="insight-msg">
+          <span class="ai-tag">分析結果</span>
+          <span class="ai-hi">Shopify の3月売上が前月比 +23%</span> に急伸。同期間の <span class="ai-hi">GA4 オーガニック流入も +31%</span> で連動しており、SEO施策の効果が示唆されます。一方 Stripe MRR は <span class="ai-hi">解約率 2.3% 増</span> で要注意です。
+        </div>
+        <div class="insight-chips">
+          <div class="insight-chip">解約原因を深掘り</div>
+          <div class="insight-chip">チャネル別比較</div>
+          <div class="insight-chip">来月の予測</div>
+          <div class="insight-chip">CSV で出力</div>
+        </div>
+        <div style="flex:1"></div>
+        <div class="insight-input-wrap">
+          <input class="insight-input" type="text" placeholder="質問を入力… (例: 先月の上位商品は？)">
+          <button class="insight-send">➤</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">⚡ データパイプライン <small>取り込み → 変換 → 分析エンジン</small></div>
+      <div class="pipeline-row">
+        <div class="pipe-step">
+          <div class="pipe-node">
+            <div class="pipe-icon-wrap">☁️<span class="pipe-active-ring"></span></div>
+            <div class="pipe-label">SaaS API</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-node">
+            <div class="pipe-icon-wrap">🗄️</div>
+            <div class="pipe-label">DB / DWH</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-node">
+            <div class="pipe-icon-wrap">📄</div>
+            <div class="pipe-label">ファイル</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-node">
+            <div class="pipe-icon-wrap">🧹</div>
+            <div class="pipe-label">正規化</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-node">
+            <div class="pipe-icon-wrap">🔗</div>
+            <div class="pipe-label">結合</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-node">
+            <div class="pipe-icon-wrap">🤖</div>
+            <div class="pipe-label">AI 分析</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-node">
+            <div class="pipe-icon-wrap">📊</div>
+            <div class="pipe-label">ダッシュボード</div>
+          </div>
+        </div>
+        <div class="pipe-info">
+          <div class="pipe-info-title">最終実行: 4分前 · 次回: 26分後</div>
+          <div class="pipe-info-sub">処理済 1,284,312 レコード · 20 ソース · エラー 0</div>
+        </div>
+        <button class="pipe-run-btn">▶ 今すぐ実行</button>
+      </div>
+    </div>
+
+    <div style="height:24px"></div>
+  </div><!-- /page-dashboard -->
+
+  <!-- ============================  CONNECTORS  ============================ -->
+  <div class="page-view active" id="page-connectors">
+    <div>
+      <div class="cat-filter-row">
+        <div class="cat-chip active">すべて</div>
+        <div class="cat-chip">CRM / MA</div>
+        <div class="cat-chip">EC / 決済</div>
+        <div class="cat-chip">分析</div>
+        <div class="cat-chip">データベース / クラウド</div>
+        <div class="cat-chip">コラボ / SaaS</div>
+        <div class="cat-chip">REST API</div>
+        <div class="cat-chip">接続済のみ</div>
+      </div>
+
+      <div class="connector-grid">
+
+        <!-- CRM / MA -->
+        <div class="conn-card connected" onclick="goToSchema('Salesforce')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-sf">☁️</div>
+          <div class="conn-name">Salesforce</div>
+          <div class="conn-desc">CRM・商談・パイプライン・活動ログ</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('HubSpot')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-hs">🟠</div>
+          <div class="conn-name">HubSpot</div>
+          <div class="conn-desc">MA・リード・メールキャンペーン</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('Google Analytics 4')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-ga">📈</div>
+          <div class="conn-name">Google Analytics 4</div>
+          <div class="conn-desc">Web流入・CV・エンゲージメント</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <!-- EC / 決済 -->
+        <div class="conn-card connected" onclick="goToSchema('Shopify')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-sp">🛍️</div>
+          <div class="conn-name">Shopify</div>
+          <div class="conn-desc">注文・在庫・顧客・商品カタログ</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('Stripe')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-st">💳</div>
+          <div class="conn-name">Stripe</div>
+          <div class="conn-desc">決済・サブスク・MRR・チャーン</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <!-- コラボ / SaaS -->
+        <div class="conn-card connected" onclick="goToSchema('Slack')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-sl">💬</div>
+          <div class="conn-name">Slack</div>
+          <div class="conn-desc">チャンネル・投稿統計・リアクション</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('kintone')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-kn">🔶</div>
+          <div class="conn-name">kintone</div>
+          <div class="conn-desc">業務アプリ・フォーム・ワークフロー</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('freee')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-fx">💴</div>
+          <div class="conn-name">freee 会計</div>
+          <div class="conn-desc">仕訳・損益・キャッシュフロー</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <!-- DB / クラウド -->
+        <div class="conn-card connected" onclick="goToSchema('BigQuery')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-bq">🗄️</div>
+          <div class="conn-name">BigQuery</div>
+          <div class="conn-desc">Google クラウドDWH・大規模分析</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('PostgreSQL')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-pg">🐘</div>
+          <div class="conn-name">PostgreSQL</div>
+          <div class="conn-desc">RDB直接クエリ・Supabase対応</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('AWS RDS')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-aws">🟠</div>
+          <div class="conn-name">AWS RDS</div>
+          <div class="conn-desc">MySQL / PostgreSQL マネージドDB</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('Amazon Redshift')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-rs">🔴</div>
+          <div class="conn-name">Amazon Redshift</div>
+          <div class="conn-desc">クラウドDWH・大規模分析クエリ</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('Oracle DB')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-ora">🔴</div>
+          <div class="conn-name">Oracle DB</div>
+          <div class="conn-desc">Oracle Database・PL/SQL・JDBC</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('Azure SQL')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-az">🔷</div>
+          <div class="conn-name">Azure SQL Database</div>
+          <div class="conn-desc">Microsoft Azure マネージドSQL</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('Azure Synapse')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-azs">🟣</div>
+          <div class="conn-name">Azure Synapse</div>
+          <div class="conn-desc">統合分析・Spark・SQL Pool</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('MySQL')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-my">🐬</div>
+          <div class="conn-name">MySQL</div>
+          <div class="conn-desc">RDB直接クエリ・セルフホスト</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-live">接続済</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card connected" onclick="goToSchema('REST API')">
+          <div class="status-dot live"></div>
+          <div class="conn-icon ic-re">🌐</div>
+          <div class="conn-name">REST API</div>
+          <div class="conn-desc">任意エンドポイント・カスタム認証</div>
+          <div class="conn-footer">
+            <span class="conn-tag tag-free">カスタム</span>
+            <span class="conn-action">設計を開く →</span>
+          </div>
+        </div>
+
+        <div class="conn-card" style="border-style:dashed;" onclick="openNewConnector()">
+          <div class="conn-icon ic-add" style="font-size:22px;color:var(--accent);">＋</div>
+          <div class="conn-name" style="color:var(--accent);">新規コネクタを追加</div>
+          <div class="conn-desc">URL・APIキーなどを自由に設定して接続</div>
+          <div class="conn-footer">
+            <span class="conn-tag" style="background:var(--accent-soft);color:var(--accent);">カスタム設定</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="spacer-end"></div>
+  </div>
+
+  <!-- ============================  FILE UPLOAD  ============================ -->
+  <div class="page-view" id="page-files">
+    <div>
+      <div class="section-title">ファイルをドラッグ＆ドロップ、または選択してアップロード</div>
+      <div class="upload-grid">
+        <div class="upload-card" onclick="goToSchema('store_master.csv')">
+          <div class="u-icon">📄</div>
+          <div class="u-label">CSV / TSV / Excel</div>
+          <div class="u-hint">売上データ・マスタ・ログなど<br>自動でスキーマを検出します</div>
+          <div class="u-exts">
+            <span class="u-ext">.csv</span><span class="u-ext">.tsv</span>
+            <span class="u-ext">.xlsx</span><span class="u-ext">.xls</span>
+          </div>
+        </div>
+        <div class="upload-card">
+          <div class="u-icon">📑</div>
+          <div class="u-label">PDF / 帳票 OCR</div>
+          <div class="u-hint">請求書・契約書・報告書を<br>AI が自動解析・構造化します</div>
+          <div class="u-exts"><span class="u-ext">.pdf</span></div>
+        </div>
+        <div class="upload-card">
+          <div class="u-icon">🖼️</div>
+          <div class="u-label">画像 (グラフ・表・レシート)</div>
+          <div class="u-hint">スクリーンショットや写真から<br>数値・テキストデータを抽出します</div>
+          <div class="u-exts">
+            <span class="u-ext">.png</span><span class="u-ext">.jpg</span><span class="u-ext">.webp</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">最近のアップロード <small>クリックしてデータ設計を開く</small></div>
+      <div class="recent-list">
+        <div class="recent-item" onclick="goToSchema('store_master.csv')" style="cursor:pointer">
+          <div class="recent-icon">📄</div>
+          <div class="recent-info">
+            <div class="recent-name">store_master.csv</div>
+            <div class="recent-meta">534 行 · 10 列 · 48 KB · 3分前にアップロード</div>
+          </div>
+          <span class="recent-status rs-ok">取り込み完了</span>
+          <div class="recent-action">データ設計を開く →</div>
+        </div>
+        <div class="recent-item" style="cursor:pointer">
+          <div class="recent-icon">📑</div>
+          <div class="recent-info">
+            <div class="recent-name">invoice_2026Q1.pdf</div>
+            <div class="recent-meta">4ページ · 請求書 × 8件検出 · OCR処理中…</div>
+          </div>
+          <span class="recent-status rs-proc">処理中</span>
+          <div class="recent-action" style="opacity:.4;pointer-events:none">準備中…</div>
+        </div>
+        <div class="recent-item" style="cursor:pointer">
+          <div class="recent-icon">📗</div>
+          <div class="recent-info">
+            <div class="recent-name">sales_Q4_2025.xlsx</div>
+            <div class="recent-meta">2,847 行 · 9 列 · 320 KB · 昨日アップロード</div>
+          </div>
+          <span class="recent-status rs-ok">取り込み完了</span>
+          <div class="recent-action" onclick="goToSchema('sales_Q4_2025.xlsx');event.stopPropagation()">データ設計を開く →</div>
+        </div>
+        <div class="recent-item">
+          <div class="recent-icon">🖼️</div>
+          <div class="recent-info">
+            <div class="recent-name">monthly_report_screenshot.png</div>
+            <div class="recent-meta">画像解析エラー — テーブルが検出できませんでした</div>
+          </div>
+          <span class="recent-status rs-err">エラー</span>
+          <div class="recent-action" style="background:var(--danger-soft);border-color:rgba(201,59,59,.2);color:var(--danger)">再試行</div>
+        </div>
+      </div>
+    </div>
+    <div class="spacer-end"></div>
+  </div>
+
+  <!-- ============================  DATA SCHEMA  ============================ -->
+  <div class="page-view" id="page-schema">
+
+    <div class="schema-topbar">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);white-space:nowrap;">データソース:</div>
+      <div class="schema-source-badge">
+        <span class="src-dot"></span>
+        <span id="schema-source-name">store_master.csv</span> ▾
+      </div>
+      <div class="schema-summary">
+        取り込み元: <b id="schema-origin">CSV アップロード</b> ·
+        <b id="schema-row-count">534 行</b> ·
+        全 <b id="schema-total-cols">10</b> 列 / 有効 <b id="schema-enabled-count">8</b> 列 ·
+        最終同期: <b>3分前</b>
+      </div>
+      <div class="schema-spacer"></div>
+      <input class="field-search" type="text" id="field-search-input" placeholder="項目名を検索…" oninput="filterTable(this.value)">
+      <button class="schema-save-btn" onclick="alert('設計を保存しました ✓')">💾 設計を保存</button>
+    </div>
+
+    <div class="bulk-bar">
+      <span class="bulk-bar-label">一括操作:</span>
+      <div class="bulk-btn" onclick="setAllToggle(true)">✅ すべて有効化</div>
+      <div class="bulk-btn" onclick="setAllToggle(false)">⬛ すべて無効化</div>
+      <div class="bulk-btn">📋 型を一括変換</div>
+      <div class="bulk-btn">🏷️ プレフィックス追加</div>
+      <div class="bulk-btn danger">↩ 名前をリセット</div>
+      <div class="bulk-hint">※ 無効にした列は分析エンジンに渡されません</div>
+    </div>
+
+    <div class="preview-panel">
+      <div class="pv-head">📊 データプレビュー統計 <small>先頭 500 行から集計</small></div>
+      <div class="preview-grid">
+        <div class="pv-stat">
+          <div class="pv-stat-label">総行数</div>
+          <div class="pv-stat-val" id="pv-rows">534</div>
+        </div>
+        <div class="pv-stat">
+          <div class="pv-stat-label">有効列数</div>
+          <div class="pv-stat-val" id="pv-cols">8 / 10</div>
+        </div>
+        <div class="pv-stat">
+          <div class="pv-stat-label">欠損値あり列</div>
+          <div class="pv-stat-val" id="pv-missing" style="color:var(--warn)">2</div>
+        </div>
+        <div class="pv-stat">
+          <div class="pv-stat-label">重複行</div>
+          <div class="pv-stat-val" id="pv-dup" style="color:var(--success)">0</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field-table-wrap">
+      <div class="ft-head">
+        <div>有効</div>
+        <div>表示名（編集可）</div>
+        <div>元のフィールド名</div>
+        <div>型</div>
+        <div>サンプル値</div>
+        <div>備考・説明</div>
+        <div></div>
+      </div>
+      <div class="ft-body" id="field-table-body"></div>
+    </div>
+
+    <div class="spacer-end"></div>
+  </div>
+
+  <!-- ============================  AI ASSISTANT  ============================ -->
+  <div class="page-view" id="page-ai">
+    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+      <div>
+        <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.3px;">🤖 AI アシスタント</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">接続中の全ソースを横断してデータ分析を自然言語で指示できます</div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="tb-pill"><span class="dot"></span> 全ソース接続中</div>
+      <button class="tb-btn primary" style="background:var(--accent);color:#fff;border:none;">＋ 新しいチャット</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 240px;gap:16px;flex:1;min-height:0;">
+      <div style="display:flex;flex-direction:column;gap:10px;min-height:0;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 14px;box-shadow:var(--shadow-xs);flex-shrink:0;">
+          <span style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-right:4px;">参照ソース:</span>
+          <span style="background:var(--accent-soft);border:1.5px solid var(--accent);color:var(--accent);border-radius:99px;padding:3px 11px;font-size:11px;font-weight:700;">🔌 全ソース</span>
+          <span class="insight-chip">☁️ Salesforce</span><span class="insight-chip">🛍️ Shopify</span>
+          <span class="insight-chip">💳 Stripe</span><span class="insight-chip">📈 GA4</span>
+          <span style="font-size:11px;color:var(--accent);cursor:pointer;font-weight:600;">+16 件…</span>
+        </div>
+        <div style="flex:1;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow-xs);">
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">🤖</div>
+            <div style="background:var(--bg2);border:1px solid var(--border);border-radius:3px 12px 12px 12px;padding:12px 16px;max-width:82%;font-size:12px;line-height:1.65;color:var(--text-sub);">
+              <span style="font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:5px;">AI アシスタント</span>
+              こんにちは！現在 <strong style="color:var(--text)">20のデータソース</strong> が接続されており横断分析が可能です。売上トレンド・顧客分析・チャーン予測など、何でも日本語で聞いてください。
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;flex-direction:row-reverse;">
+            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--coral),var(--accent));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;">T</div>
+            <div style="background:var(--accent);border-radius:12px 3px 12px 12px;padding:10px 15px;max-width:72%;font-size:12px;line-height:1.55;color:#fff;">
+              Shopifyの先月売上上位5商品と、Stripeのサブスク解約率を一緒に見せて
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">🤖</div>
+            <div style="background:var(--bg2);border:1px solid var(--border);border-radius:3px 12px 12px 12px;padding:12px 16px;max-width:90%;font-size:12px;line-height:1.65;color:var(--text-sub);">
+              <span style="font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:8px;">Shopify + Stripe · 3月分析</span>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div>
+                  <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">Shopify TOP5</div>
+                  <div style="display:flex;flex-direction:column;gap:3px;font-size:11px;">
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span>プレミアムプラン</span><span style="font-weight:700;color:var(--text);">¥2.4M</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span>スターターキット</span><span style="font-weight:700;color:var(--text);">¥1.8M</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span>AI分析アドオン</span><span style="font-weight:700;color:var(--text);">¥960K</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span>エンタープライズ</span><span style="font-weight:700;color:var(--text);">¥840K</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>API連携オプション</span><span style="font-weight:700;color:var(--text);">¥320K</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">Stripe チャーン率</div>
+                  <div style="display:flex;flex-direction:column;gap:7px;">
+                    <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:10px;width:22px;color:var(--text-muted);">1月</span><div style="flex:1;height:8px;background:var(--border);border-radius:99px;"><div style="width:18%;height:100%;background:var(--success);border-radius:99px;"></div></div><span style="font-size:10px;font-weight:700;color:var(--success);">1.8%</span></div>
+                    <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:10px;width:22px;color:var(--text-muted);">2月</span><div style="flex:1;height:8px;background:var(--border);border-radius:99px;"><div style="width:20%;height:100%;background:var(--warn);border-radius:99px;"></div></div><span style="font-size:10px;font-weight:700;color:var(--warn);">2.0%</span></div>
+                    <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:10px;width:22px;color:var(--text-muted);">3月</span><div style="flex:1;height:8px;background:var(--border);border-radius:99px;"><div style="width:23%;height:100%;background:var(--danger);border-radius:99px;"></div></div><span style="font-size:10px;font-weight:700;color:var(--danger);">2.3%</span></div>
+                  </div>
+                  <div style="margin-top:10px;padding:7px 9px;background:var(--danger-soft);border-radius:var(--radius-sm);font-size:10px;color:var(--danger);">⚠️ チャーン率上昇中。要因分析を推奨します。</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex-shrink:0;">
+          <span style="font-size:10px;color:var(--text-muted);">おすすめ:</span>
+          <div class="insight-chip">チャーン顧客の共通点を分析</div>
+          <div class="insight-chip">来月の売上を予測</div>
+          <div class="insight-chip">Salesforceと突合して原因を特定</div>
+          <div class="insight-chip">CSV でエクスポート</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <input style="flex:1;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;font-size:13px;color:var(--text);outline:none;box-shadow:var(--shadow-xs);" type="text" placeholder="質問を入力… (例: 今週の売上を曜日別に見せて)">
+          <button style="background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);padding:11px 20px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(92,78,229,.25);">送信 ➤</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;overflow-y:auto;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;box-shadow:var(--shadow-xs);">
+          <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:10px;">📡 参照中ソース</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg2);border-radius:var(--radius-sm);"><span style="font-size:13px;">☁️</span><span style="font-size:11px;font-weight:600;color:var(--text);flex:1;">Salesforce</span><span style="width:7px;height:7px;border-radius:50%;background:var(--success);"></span></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg2);border-radius:var(--radius-sm);"><span style="font-size:13px;">🛍️</span><span style="font-size:11px;font-weight:600;color:var(--text);flex:1;">Shopify</span><span style="width:7px;height:7px;border-radius:50%;background:var(--success);"></span></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg2);border-radius:var(--radius-sm);"><span style="font-size:13px;">💳</span><span style="font-size:11px;font-weight:600;color:var(--text);flex:1;">Stripe</span><span style="width:7px;height:7px;border-radius:50%;background:var(--success);"></span></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg2);border-radius:var(--radius-sm);"><span style="font-size:13px;">📈</span><span style="font-size:11px;font-weight:600;color:var(--text);flex:1;">GA4</span><span style="width:7px;height:7px;border-radius:50%;background:var(--success);"></span></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg2);border-radius:var(--radius-sm);"><span style="font-size:13px;">🗄️</span><span style="font-size:11px;font-weight:600;color:var(--text);flex:1;">Oracle DB</span><span style="width:7px;height:7px;border-radius:50%;background:var(--success);"></span></div>
+            <div style="font-size:10px;color:var(--accent);cursor:pointer;text-align:center;padding-top:4px;">+ 15件すべて表示</div>
+          </div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;box-shadow:var(--shadow-xs);">
+          <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:10px;">🕐 会話履歴</div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="padding:7px 9px;border-radius:var(--radius-sm);background:var(--accent-soft);border:1px solid rgba(92,78,229,.15);cursor:pointer;"><div style="font-size:11px;font-weight:600;color:var(--accent);">現在の会話</div><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">Shopify + Stripe 分析</div></div>
+            <div style="padding:7px 9px;border-radius:var(--radius-sm);cursor:pointer;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''"><div style="font-size:11px;font-weight:600;color:var(--text);">3月売上レポート</div><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">昨日 14:32</div></div>
+            <div style="padding:7px 9px;border-radius:var(--radius-sm);cursor:pointer;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''"><div style="font-size:11px;font-weight:600;color:var(--text);">Oracle 受注 vs 在庫照合</div><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">2日前</div></div>
+            <div style="padding:7px 9px;border-radius:var(--radius-sm);cursor:pointer;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''"><div style="font-size:11px;font-weight:600;color:var(--text);">チャーン予測モデル</div><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">4日前</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="height:16px"></div>
+  </div>
+
+  <!-- ============================  REPORTS  ============================ -->
+  <div class="page-view" id="page-reports">
+    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+      <div>
+        <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.3px;">📋 レポート</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">保存済みレポート · 共有ダッシュボード · スケジュール配信</div>
+      </div>
+      <div style="flex:1"></div>
+      <button class="tb-btn ghost">📤 一括エクスポート</button>
+      <button class="tb-btn primary" style="background:var(--accent);color:#fff;border:none;">＋ 新規レポート</button>
+    </div>
+    <div class="cat-filter-row" style="margin-bottom:0;flex-shrink:0;">
+      <div class="cat-chip active">すべて (6)</div>
+      <div class="cat-chip">売上・財務</div>
+      <div class="cat-chip">マーケティング</div>
+      <div class="cat-chip">顧客分析</div>
+      <div class="cat-chip">運用</div>
+      <div class="cat-chip">⭐ お気に入り</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:16px;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-xs);cursor:pointer;transition:var(--transition);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow-xs)'">
+        <div style="height:80px;background:linear-gradient(135deg,#EDE9FF,#E8F0FE);padding:12px 16px;display:flex;align-items:flex-end;gap:3px;">
+          <div style="flex:1;height:35%;background:var(--accent);border-radius:3px 3px 0 0;opacity:.5;"></div><div style="flex:1;height:55%;background:var(--accent);border-radius:3px 3px 0 0;opacity:.65;"></div><div style="flex:1;height:48%;background:var(--accent);border-radius:3px 3px 0 0;opacity:.7;"></div><div style="flex:1;height:75%;background:var(--accent);border-radius:3px 3px 0 0;opacity:.85;"></div><div style="flex:1;height:90%;background:var(--accent);border-radius:3px 3px 0 0;opacity:.95;"></div><div style="flex:1;height:100%;background:var(--accent);border-radius:3px 3px 0 0;"></div>
+        </div>
+        <div style="padding:14px 16px;"><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">月次売上サマリ</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;">Salesforce + Shopify · 4分前更新</div><div style="display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;gap:4px;"><span style="background:var(--accent-soft);color:var(--accent);font-size:9px;font-weight:700;border-radius:99px;padding:2px 8px;">売上</span><span style="background:var(--success-soft);color:var(--success);font-size:9px;font-weight:700;border-radius:99px;padding:2px 8px;">↑ 12.4%</span></div><span style="font-size:12px;color:var(--warn);">⭐</span></div></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-xs);cursor:pointer;transition:var(--transition);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow-xs)'">
+        <div style="height:80px;background:linear-gradient(135deg,#E6F6EF,#E8F5E9);padding:12px 16px;display:flex;align-items:flex-end;gap:3px;">
+          <div style="flex:1;height:60%;background:var(--success);border-radius:3px 3px 0 0;opacity:.5;"></div><div style="flex:1;height:40%;background:var(--success);border-radius:3px 3px 0 0;opacity:.6;"></div><div style="flex:1;height:70%;background:var(--success);border-radius:3px 3px 0 0;opacity:.7;"></div><div style="flex:1;height:55%;background:var(--success);border-radius:3px 3px 0 0;opacity:.8;"></div><div style="flex:1;height:80%;background:var(--success);border-radius:3px 3px 0 0;opacity:.9;"></div><div style="flex:1;height:65%;background:var(--success);border-radius:3px 3px 0 0;"></div>
+        </div>
+        <div style="padding:14px 16px;"><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">顧客獲得コスト (CAC) 推移</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;">HubSpot + GA4 · 1時間前更新</div><div style="display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;gap:4px;"><span style="background:var(--success-soft);color:var(--success);font-size:9px;font-weight:700;border-radius:99px;padding:2px 8px;">マーケ</span></div><span style="font-size:11px;color:var(--text-muted);">🔗 共有</span></div></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-xs);cursor:pointer;transition:var(--transition);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow-xs)'">
+        <div style="height:80px;background:linear-gradient(135deg,#FDEAEA,#FFF8E6);padding:12px 16px;display:flex;align-items:flex-end;gap:3px;">
+          <div style="flex:1;height:50%;background:var(--warn);border-radius:3px 3px 0 0;opacity:.5;"></div><div style="flex:1;height:55%;background:var(--warn);border-radius:3px 3px 0 0;opacity:.6;"></div><div style="flex:1;height:45%;background:var(--danger);border-radius:3px 3px 0 0;opacity:.7;"></div><div style="flex:1;height:60%;background:var(--danger);border-radius:3px 3px 0 0;opacity:.8;"></div><div style="flex:1;height:55%;background:var(--danger);border-radius:3px 3px 0 0;opacity:.9;"></div><div style="flex:1;height:65%;background:var(--danger);border-radius:3px 3px 0 0;"></div>
+        </div>
+        <div style="padding:14px 16px;"><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Stripe チャーン率分析</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;">Stripe + MySQL · 30分前更新</div><div style="display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;gap:4px;"><span style="background:var(--danger-soft);color:var(--danger);font-size:9px;font-weight:700;border-radius:99px;padding:2px 8px;">要注意</span><span style="background:var(--bg2);color:var(--text-muted);font-size:9px;font-weight:700;border-radius:99px;padding:2px 8px;">顧客</span></div><span style="font-size:12px;color:var(--warn);">⭐</span></div></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-xs);cursor:pointer;transition:var(--transition);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow-xs)'">
+        <div style="height:80px;background:linear-gradient(135deg,#E6F3FC,#EDE9FF);padding:12px 16px;display:flex;align-items:flex-end;gap:3px;">
+          <div style="flex:1;height:80%;background:var(--info);border-radius:3px 3px 0 0;opacity:.5;"></div><div style="flex:1;height:90%;background:var(--info);border-radius:3px 3px 0 0;opacity:.6;"></div><div style="flex:1;height:70%;background:var(--info);border-radius:3px 3px 0 0;opacity:.7;"></div><div style="flex:1;height:95%;background:var(--info);border-radius:3px 3px 0 0;opacity:.85;"></div><div style="flex:1;height:85%;background:var(--info);border-radius:3px 3px 0 0;opacity:.95;"></div><div style="flex:1;height:100%;background:var(--info);border-radius:3px 3px 0 0;"></div>
+        </div>
+        <div style="padding:14px 16px;"><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">GA4 オーガニック流入</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;">GA4 · 1時間前更新 · 週次</div><div style="display:flex;align-items:center;justify-content:space-between;"><div><span style="background:var(--info-soft);color:var(--info);font-size:9px;font-weight:700;border-radius:99px;padding:2px 8px;">マーケ</span></div><span style="font-size:11px;color:var(--text-muted);">📅 週次配信</span></div></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-xs);cursor:pointer;transition:var(--transition);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow)'" onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow-xs)'">
+        <div style="height:80px;background:linear-gradient(135deg,#FFF3E0,#FDEAEA);display:flex;align-items:center;justify-content:center;">
+          <div style="text-align:center;color:var(--text-muted);"><div style="font-size:30px;opacity:.5;">📊</div><div style="font-size:10px;margin-top:3px;">Oracle 売上照合</div></div>
+        </div>
+        <div style="padding:14px 16px;"><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Oracle 受注 vs 売掛照合</div><div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;">Oracle DB + freee · 毎朝 8:00 実行</div><div style="display:flex;gap:4px;"><span style="background:var(--bg2);color:var(--text-muted);font-size:9px;font-weight:700;border-radius:99px;padding:2px 8px;">財務</span><span style="background:var(--success-soft);color:var(--success);font-size:9px;font-weight:700;border-radius:99px;padding:2px 8px;">スケジュール済</span></div></div>
+      </div>
+      <div style="background:var(--surface);border:1.5px dashed var(--border-hi);border-radius:var(--radius-lg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:30px;cursor:pointer;transition:var(--transition);min-height:180px;" onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--accent-soft)'" onmouseout="this.style.borderColor='var(--border-hi)';this.style.background='var(--surface)'">
+        <div style="font-size:32px;color:var(--accent);opacity:.5;">＋</div>
+        <div style="font-size:13px;font-weight:700;color:var(--accent);">新規レポートを作成</div>
+        <div style="font-size:10px;color:var(--text-muted);text-align:center;">AI が自動でレイアウトを<br>提案します</div>
+      </div>
+    </div>
+    <div style="height:24px"></div>
+  </div>
+
+  <!-- ============================  SETTINGS  ============================ -->
+  <div class="page-view" id="page-settings">
+    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+      <div>
+        <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.3px;">⚙️ 設定</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">ワークスペース · ユーザー · 認証 · 通知 · 請求</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:190px 1fr;gap:20px;flex:1;min-height:0;overflow:hidden;">
+      <div style="display:flex;flex-direction:column;gap:2px;overflow-y:auto;">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);padding:10px 10px 4px;">アカウント</div>
+        <div style="padding:9px 12px;border-radius:var(--radius-sm);background:var(--accent-soft);border-left:3px solid var(--accent);cursor:pointer;font-size:12px;font-weight:600;color:var(--accent);">👤 プロフィール</div>
+        <div style="padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;color:var(--text-sub);" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">🔐 セキュリティ</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);padding:14px 10px 4px;">ワークスペース</div>
+        <div style="padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;color:var(--text-sub);" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">🏢 全般設定</div>
+        <div style="padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;color:var(--text-sub);" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">👥 メンバー管理</div>
+        <div style="padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;color:var(--text-sub);" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">🔑 APIキー管理</div>
+        <div style="padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;color:var(--text-sub);" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">🔔 通知設定</div>
+        <div style="padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;color:var(--text-sub);" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">🗑️ データ保持</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);padding:14px 10px 4px;">請求</div>
+        <div style="padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;color:var(--text-sub);" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">💳 プラン・請求</div>
+      </div>
+      <div style="overflow-y:auto;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;box-shadow:var(--shadow-xs);display:flex;flex-direction:column;gap:20px;">
+          <div style="display:flex;align-items:center;gap:14px;padding-bottom:16px;border-bottom:1px solid var(--border);">
+            <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--coral),var(--accent));display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0;">T</div>
+            <div><div style="font-size:16px;font-weight:800;color:var(--text);">田中 太郎 (Taro Satou)</div><div style="font-size:12px;color:var(--text-muted);margin-top:3px;">tarchi.sa1043@gmail.com · 管理者</div></div>
+            <div style="flex:1"></div>
+            <button style="background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(92,78,229,.25);">変更を保存</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group"><label class="form-label">姓 <span>*</span></label><input class="form-input" type="text" value="田中"></div>
+            <div class="form-group"><label class="form-label">名 <span>*</span></label><input class="form-input" type="text" value="太郎"></div>
+            <div class="form-group"><label class="form-label">メールアドレス <span>*</span></label><input class="form-input" type="email" value="tarchi.sa1043@gmail.com"></div>
+            <div class="form-group"><label class="form-label">表示言語</label><select class="form-select"><option selected>日本語</option><option>English</option></select></div>
+            <div class="form-group"><label class="form-label">タイムゾーン</label><select class="form-select"><option selected>Asia/Tokyo (JST, +9:00)</option><option>UTC</option></select></div>
+            <div class="form-group"><label class="form-label">日付フォーマット</label><select class="form-select"><option selected>YYYY/MM/DD</option><option>MM/DD/YYYY</option></select></div>
+          </div>
+          <div style="padding:16px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border);">
+            <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px;">🔑 APIアクセストークン</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input class="form-input" type="password" value="db_api_sk_live_abc123xyz456..." style="flex:1;font-family:monospace;font-size:11px;">
+              <button style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">コピー</button>
+              <button style="background:var(--danger-soft);border:1.5px solid rgba(201,59,59,.2);color:var(--danger);border-radius:var(--radius-sm);padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">再生成</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ====== NEW CONNECTOR MODAL ====== -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOutside(event)">
+  <div class="modal" id="modal-box">
+
+    <div class="modal-head">
+      <div class="modal-head-icon">🔌</div>
+      <div class="modal-head-text">
+        <div class="modal-title">新規コネクタを追加</div>
+        <div class="modal-subtitle">接続先のURL・認証情報・取得項目を設定します</div>
+      </div>
+      <div class="modal-close" onclick="closeModal()">✕</div>
+    </div>
+
+    <div class="modal-body">
+
+      <!-- 基本情報 -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">コネクタ名 <span>*</span></label>
+          <input class="form-input" type="text" placeholder="例: 社内受注API" id="conn-name-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">コネクタ種別 <span>*</span></label>
+          <select class="form-select" id="conn-type-select" onchange="onTypeChange(this.value)">
+            <option value="rest">REST API</option>
+            <option value="db">データベース (JDBC)</option>
+            <option value="graphql">GraphQL</option>
+            <option value="websocket">WebSocket</option>
+            <option value="ftp">FTP / SFTP</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- エンドポイント -->
+      <div class="form-group" id="fg-url">
+        <label class="form-label">ベースURL / サーバーIP <span>*</span></label>
+        <input class="form-input" type="text" id="conn-url" placeholder="例: https://api.example.com/v2  または  192.168.1.50">
+        <div class="form-hint">REST APIの場合はベースURL、DBの場合はホスト名またはIPアドレス</div>
+      </div>
+
+      <div class="form-row" id="fg-db-extra" style="display:none">
+        <div class="form-group">
+          <label class="form-label">ポート</label>
+          <input class="form-input" type="text" placeholder="例: 3306" id="conn-port">
+        </div>
+        <div class="form-group">
+          <label class="form-label">データベース名 <span>*</span></label>
+          <input class="form-input" type="text" placeholder="例: sales_db" id="conn-dbname">
+        </div>
+      </div>
+
+      <div class="form-divider">認証設定</div>
+
+      <!-- 認証タイプ -->
+      <div class="auth-section">
+        <div class="auth-section-title">認証方式</div>
+        <div class="auth-tabs" id="auth-tabs">
+          <div class="auth-tab active" onclick="switchAuth('apikey')">API キー</div>
+          <div class="auth-tab" onclick="switchAuth('bearer')">Bearer トークン</div>
+          <div class="auth-tab" onclick="switchAuth('basic')">Basic 認証</div>
+          <div class="auth-tab" onclick="switchAuth('oauth2')">OAuth 2.0</div>
+          <div class="auth-tab" onclick="switchAuth('none')">なし</div>
+        </div>
+
+        <!-- API Key -->
+        <div id="auth-apikey">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">ヘッダー名</label>
+              <input class="form-input" type="text" value="X-API-Key" id="conn-key-header">
+            </div>
+            <div class="form-group">
+              <label class="form-label">API キー値 <span>*</span></label>
+              <input class="form-input" type="password" placeholder="sk-…" id="conn-key-value">
+            </div>
+          </div>
+        </div>
+
+        <!-- Bearer -->
+        <div id="auth-bearer" style="display:none">
+          <div class="form-group">
+            <label class="form-label">アクセストークン <span>*</span></label>
+            <input class="form-input" type="password" placeholder="eyJhbGci…" id="conn-bearer">
+          </div>
+        </div>
+
+        <!-- Basic -->
+        <div id="auth-basic" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">ユーザー名 <span>*</span></label>
+              <input class="form-input" type="text" placeholder="admin" id="conn-basic-user">
+            </div>
+            <div class="form-group">
+              <label class="form-label">パスワード <span>*</span></label>
+              <input class="form-input" type="password" placeholder="••••••••" id="conn-basic-pass">
+            </div>
+          </div>
+        </div>
+
+        <!-- OAuth2 -->
+        <div id="auth-oauth2" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">クライアントID <span>*</span></label>
+              <input class="form-input" type="text" placeholder="client_id" id="conn-oauth-id">
+            </div>
+            <div class="form-group">
+              <label class="form-label">クライアントシークレット <span>*</span></label>
+              <input class="form-input" type="password" placeholder="client_secret" id="conn-oauth-secret">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:8px">
+            <label class="form-label">トークンエンドポイント</label>
+            <input class="form-input" type="text" placeholder="https://auth.example.com/oauth/token" id="conn-oauth-url">
+          </div>
+        </div>
+
+        <!-- None -->
+        <div id="auth-none" style="display:none">
+          <div class="form-hint" style="color:var(--warn)">⚠️ 認証なし。公開エンドポイントのみ使用してください。</div>
+        </div>
+      </div>
+
+      <!-- 追加ヘッダー / オプション -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">同期間隔</label>
+          <select class="form-select" id="conn-interval">
+            <option>5分ごと</option>
+            <option>15分ごと</option>
+            <option selected>30分ごと</option>
+            <option>1時間ごと</option>
+            <option>手動のみ</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">タイムアウト (秒)</label>
+          <input class="form-input" type="number" value="30" min="5" max="300" id="conn-timeout">
+        </div>
+      </div>
+
+      <div class="form-divider">取得項目の設定</div>
+
+      <!-- Custom Fields -->
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+          レスポンスから取り込む項目名・型・表示名を定義します。未設定の場合は自動検出します。
+        </div>
+        <div class="cf-header">
+          <span>フィールドパス / キー名</span>
+          <span>表示名</span>
+          <span>型</span>
+          <span></span>
+        </div>
+        <div class="custom-fields-area" id="custom-fields">
+          <!-- rows injected by JS -->
+        </div>
+        <button class="add-field-btn" onclick="addCustomField()">
+          ＋ 項目を追加
+        </button>
+      </div>
+
+    </div><!-- /modal-body -->
+
+    <div class="modal-footer">
+      <button class="test-conn-btn" onclick="testConnection()">⚡ 接続テスト</button>
+      <div class="test-result" id="test-result"></div>
+      <div class="modal-spacer"></div>
+      <button class="modal-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="modal-save" onclick="saveConnector()">💾 接続を保存</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ---- page switch (nav icons) ---- */
+function switchPage(name) {
+  document.querySelectorAll('.tb-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navEl = document.getElementById('nav-' + name);
+  if (navEl) navEl.classList.add('active');
+}
+
+/* ---- tab switch ---- */
+function switchTab(name) {
+  document.querySelectorAll('.tb-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navMap = { connectors:'nav-connectors', files:'nav-connectors', schema:'nav-schema' };
+  const navEl = document.getElementById(navMap[name] || 'nav-connectors');
+  if (navEl) navEl.classList.add('active');
+}
+
+/* ---- schema map ---- */
+const schemaMap = {
+  'Salesforce':        { rows:'1,204',      origin:'Salesforce API',    missing:1, dup:0, fields:()=>salesforceFields },
+  'Shopify':           { rows:'8,312',      origin:'Shopify API',       missing:0, dup:0, fields:()=>shopifyFields },
+  'Stripe':            { rows:'3,561',      origin:'Stripe API',        missing:1, dup:0, fields:()=>stripeFields },
+  'freee':             { rows:'2,041',      origin:'freee API',         missing:0, dup:0, fields:()=>freeeFields },
+  'Slack':             { rows:'45,820',     origin:'Slack API',         missing:2, dup:0, fields:()=>slackFields },
+  'Oracle DB':         { rows:'28,740',     origin:'Oracle JDBC',       missing:1, dup:3, fields:()=>oracleFields },
+  'AWS RDS':           { rows:'12,500',     origin:'AWS RDS (MySQL)',   missing:0, dup:0, fields:()=>rdsFields },
+  'Amazon Redshift':   { rows:'1,284,032',  origin:'Redshift JDBC',    missing:0, dup:0, fields:()=>redshiftFields },
+  'Azure SQL':         { rows:'3,900',      origin:'Azure SQL',         missing:1, dup:0, fields:()=>azureSqlFields },
+  'Azure Synapse':     { rows:'9,240,180',  origin:'Azure Synapse SQL', missing:0, dup:0, fields:()=>azureSynapseFields },
+  'MySQL':             { rows:'52,380',     origin:'MySQL 8.0',         missing:1, dup:0, fields:()=>mysqlFields },
+  'REST API':          { rows:'1,820',      origin:'REST API (カスタム)',missing:0, dup:0, fields:()=>restApiFields },
+  'sales_Q4_2025.xlsx':{ rows:'2,847',      origin:'Excel アップロード',missing:1, dup:0, fields:()=>salesFields },
+  'store_master.csv':  { rows:'534',        origin:'CSV アップロード',  missing:2, dup:0, fields:()=>csvFields },
+};
+
+function goToSchema(sourceName) {
+  document.getElementById('schema-source-name').textContent = sourceName;
+  const cfg = schemaMap[sourceName] || { rows:'—', origin:'—', missing:0, dup:0, fields:()=>csvFields };
+  document.getElementById('schema-row-count').textContent = cfg.rows + ' 行';
+  document.getElementById('schema-origin').textContent = cfg.origin;
+  document.getElementById('pv-rows').textContent = cfg.rows;
+  document.getElementById('pv-missing').textContent = cfg.missing;
+  document.getElementById('pv-dup').textContent = cfg.dup;
+  document.getElementById('field-search-input').value = '';
+  buildFieldTable(cfg.fields());
+  switchTab('schema');
+}
+
+/* ============================================================
+   FIELD DATASETS
+   ============================================================ */
+const csvFields = [
+  { enabled:true,  orig:'store_id',      label:'店舗ID',        type:'number', sample:'1001',           note:'一意キー', key:true },
+  { enabled:true,  orig:'store_name',    label:'店舗名',        type:'string', sample:'渋谷東口店',      note:''                  },
+  { enabled:true,  orig:'prefecture',    label:'都道府県',      type:'string', sample:'東京都',          note:''                  },
+  { enabled:true,  orig:'address',       label:'住所',          type:'string', sample:'渋谷区道玄坂…',   note:''                  },
+  { enabled:true,  orig:'open_date',     label:'開店日',        type:'date',   sample:'2018-04-01',     note:''                  },
+  { enabled:true,  orig:'capacity',      label:'客席数',        type:'number', sample:'48',             note:''                  },
+  { enabled:true,  orig:'is_active',     label:'営業中フラグ',  type:'bool',   sample:'true',           note:''                  },
+  { enabled:true,  orig:'manager_name',  label:'店長名',        type:'string', sample:'田中 雄一',       note:''                  },
+  { enabled:false, orig:'internal_code', label:'internal_code', type:'string', sample:'TK-001-A',       note:'内部コード（除外中）' },
+  { enabled:false, orig:'legacy_id',     label:'legacy_id',     type:'string', sample:'00923',          note:'旧システムID（除外中）' },
+];
+
+const salesFields = [
+  { enabled:true,  orig:'receipt_no',    label:'伝票番号',  type:'string', sample:'R-20251001-0042', note:'', key:true },
+  { enabled:true,  orig:'visit_date',    label:'来店日',    type:'date',   sample:'2025-10-01',      note:''           },
+  { enabled:true,  orig:'store_id',      label:'店舗ID',    type:'number', sample:'1001',            note:'店舗マスタと結合可' },
+  { enabled:true,  orig:'item_name',     label:'商品名',    type:'string', sample:'生ビール（中）',  note:''           },
+  { enabled:true,  orig:'qty',           label:'数量',      type:'number', sample:'2',               note:''           },
+  { enabled:true,  orig:'unit_price',    label:'単価',      type:'number', sample:'580',             note:'税抜'        },
+  { enabled:true,  orig:'total_amount',  label:'合計金額',  type:'number', sample:'1160',            note:'税抜'        },
+  { enabled:false, orig:'raw_timestamp', label:'raw_timestamp', type:'string', sample:'1696118400', note:'UNIXタイム（除外中）' },
+  { enabled:true,  orig:'payment_type',  label:'支払方法',  type:'string', sample:'現金',            note:''           },
+];
+
+const salesforceFields = [
+  { enabled:true,  orig:'Id',             label:'商談ID',         type:'string', sample:'006…abc',         note:'', key:true },
+  { enabled:true,  orig:'Name',           label:'商談名',         type:'string', sample:'A社 システム提案', note:''           },
+  { enabled:true,  orig:'AccountId',      label:'取引先ID',       type:'string', sample:'001…def',         note:'取引先と結合可' },
+  { enabled:true,  orig:'Amount',         label:'金額',           type:'number', sample:'2500000',         note:'円'          },
+  { enabled:true,  orig:'StageName',      label:'フェーズ',       type:'string', sample:'提案中',          note:''           },
+  { enabled:true,  orig:'CloseDate',      label:'クローズ予定日', type:'date',   sample:'2026-06-30',      note:''           },
+  { enabled:true,  orig:'Probability',    label:'成約確率',       type:'number', sample:'60',              note:'%'           },
+  { enabled:true,  orig:'OwnerId',        label:'担当者ID',       type:'string', sample:'005…xyz',         note:''           },
+  { enabled:false, orig:'SystemModstamp', label:'SystemModstamp', type:'date',   sample:'2026-04-20T…',    note:'SF内部（除外中）' },
+  { enabled:false, orig:'IsDeleted',      label:'IsDeleted',      type:'bool',   sample:'false',           note:'削除済フラグ（除外中）' },
+];
+
+const shopifyFields = [
+  { enabled:true,  orig:'id',                label:'注文ID',       type:'number', sample:'5001234567890',       note:'', key:true },
+  { enabled:true,  orig:'order_number',       label:'注文番号',     type:'number', sample:'1082',               note:'表示用連番'     },
+  { enabled:true,  orig:'created_at',         label:'注文日時',     type:'date',   sample:'2026-03-15T14:22:00', note:'JST変換済'     },
+  { enabled:true,  orig:'financial_status',   label:'支払状態',     type:'string', sample:'paid',               note:'paid/pending/refunded' },
+  { enabled:true,  orig:'fulfillment_status', label:'配送状態',     type:'string', sample:'fulfilled',          note:''              },
+  { enabled:true,  orig:'total_price',        label:'合計金額',     type:'number', sample:'5280',               note:'税込・送料込'   },
+  { enabled:true,  orig:'subtotal_price',     label:'小計',         type:'number', sample:'4800',               note:'税抜'           },
+  { enabled:true,  orig:'total_tax',          label:'消費税額',     type:'number', sample:'480',                note:''              },
+  { enabled:true,  orig:'currency',           label:'通貨',         type:'string', sample:'JPY',                note:''              },
+  { enabled:true,  orig:'customer_id',        label:'顧客ID',       type:'number', sample:'7890123456',         note:'顧客テーブルと結合可' },
+  { enabled:true,  orig:'customer_email',     label:'メールアドレス', type:'string', sample:'taro@example.com', note:''              },
+  { enabled:true,  orig:'payment_gateway',    label:'決済方法',     type:'string', sample:'shopify_payments',   note:''              },
+  { enabled:true,  orig:'discount_codes',     label:'割引コード',   type:'json',   sample:'[{"code":"SALE10"}]',note:''              },
+  { enabled:false, orig:'line_items',         label:'line_items',   type:'json',   sample:'[{…}]',              note:'明細JSON（除外中）' },
+  { enabled:false, orig:'shipping_address',   label:'shipping_address', type:'json', sample:'{…}',             note:'住所JSON（除外中）' },
+];
+
+/* ---- Stripe ---- */
+const stripeFields = [
+  { enabled:true,  orig:'id',                 label:'チャージID',     type:'string', sample:'ch_1Abc…',          note:'', key:true },
+  { enabled:true,  orig:'created',            label:'決済日時',       type:'date',   sample:'2026-03-20T11:30',  note:'Unix→JST変換済' },
+  { enabled:true,  orig:'amount',             label:'金額',           type:'number', sample:'4800',              note:'円 (最小単位)' },
+  { enabled:true,  orig:'currency',           label:'通貨',           type:'string', sample:'jpy',               note:''             },
+  { enabled:true,  orig:'status',             label:'決済ステータス', type:'string', sample:'succeeded',         note:'succeeded/failed/pending' },
+  { enabled:true,  orig:'customer',           label:'顧客ID',         type:'string', sample:'cus_Abc123',        note:'顧客テーブルと結合可' },
+  { enabled:true,  orig:'payment_method_type',label:'支払手段',       type:'string', sample:'card',              note:'card/konbini/link' },
+  { enabled:true,  orig:'description',        label:'決済説明',       type:'string', sample:'Proプラン 月額',    note:''             },
+  { enabled:true,  orig:'invoice',            label:'インボイスID',   type:'string', sample:'in_1Xyz…',          note:'サブスク請求と結合可' },
+  { enabled:true,  orig:'subscription',       label:'サブスクリプションID', type:'string', sample:'sub_1Lmn…',   note:''             },
+  { enabled:true,  orig:'refunded',           label:'返金フラグ',     type:'bool',   sample:'false',             note:''             },
+  { enabled:true,  orig:'amount_refunded',    label:'返金額',         type:'number', sample:'0',                 note:'円'           },
+  { enabled:false, orig:'metadata',           label:'metadata',       type:'json',   sample:'{…}',               note:'任意メタデータ（除外中）' },
+  { enabled:false, orig:'livemode',           label:'livemode',       type:'bool',   sample:'true',              note:'本番/テスト区別（除外中）' },
+];
+
+const freeeFields = [
+  { enabled:true,  orig:'id',               label:'取引ID',     type:'number', sample:'103847',               note:'', key:true },
+  { enabled:true,  orig:'issue_date',       label:'発生日',     type:'date',   sample:'2026-03-31',           note:''           },
+  { enabled:true,  orig:'due_date',         label:'支払期日',   type:'date',   sample:'2026-04-30',           note:''           },
+  { enabled:true,  orig:'amount',           label:'金額',       type:'number', sample:'330000',               note:'税込'        },
+  { enabled:true,  orig:'account_item_name',label:'勘定科目',   type:'string', sample:'売上高',               note:''           },
+  { enabled:true,  orig:'tax_code',         label:'税区分',     type:'string', sample:'課税売上10%',          note:''           },
+  { enabled:true,  orig:'partner_name',     label:'取引先名',   type:'string', sample:'株式会社サンプル',     note:''           },
+  { enabled:true,  orig:'debit_credit',     label:'貸借区分',   type:'string', sample:'貸方',                 note:'debit/credit' },
+  { enabled:true,  orig:'section_name',     label:'部門',       type:'string', sample:'東日本営業部',         note:''           },
+  { enabled:true,  orig:'approval_status',  label:'承認状態',   type:'string', sample:'approved',             note:'draft/approved/rejected' },
+  { enabled:true,  orig:'description',      label:'備考',       type:'string', sample:'3月分役務提供',        note:''           },
+  { enabled:false, orig:'company_id',       label:'company_id', type:'number', sample:'7654321',              note:'freee内部ID（除外中）' },
+  { enabled:false, orig:'created_at',       label:'created_at', type:'date',   sample:'2026-04-01T09:00:00',  note:'システム登録日時（除外中）' },
+];
+
+const slackFields = [
+  { enabled:true,  orig:'ts',             label:'タイムスタンプ',  type:'string', sample:'1712016000.000100', note:'メッセージ一意ID', key:true },
+  { enabled:true,  orig:'channel_id',     label:'チャンネルID',    type:'string', sample:'C0847ABCDEF',       note:''              },
+  { enabled:true,  orig:'channel_name',   label:'チャンネル名',    type:'string', sample:'#sales-team',       note:''              },
+  { enabled:true,  orig:'user_id',        label:'ユーザーID',      type:'string', sample:'U012AB3CD',         note:''              },
+  { enabled:true,  orig:'user_name',      label:'ユーザー名',      type:'string', sample:'taro.yamada',       note:''              },
+  { enabled:true,  orig:'text',           label:'メッセージ本文',  type:'string', sample:'今月の売上目標は…', note:''              },
+  { enabled:true,  orig:'reaction_count', label:'リアクション数',  type:'number', sample:'5',                 note:''              },
+  { enabled:true,  orig:'reply_count',    label:'返信数',          type:'number', sample:'3',                 note:''              },
+  { enabled:true,  orig:'thread_ts',      label:'スレッドID',      type:'string', sample:'1712016000.000050', note:'親メッセージTS' },
+  { enabled:true,  orig:'is_bot',         label:'BOT投稿フラグ',   type:'bool',   sample:'false',             note:''              },
+  { enabled:false, orig:'attachments',    label:'attachments',     type:'json',   sample:'[{…}]',             note:'添付JSON（除外中）' },
+  { enabled:false, orig:'blocks',         label:'blocks',          type:'json',   sample:'[{…}]',             note:'Block Kit（除外中）' },
+];
+
+/* ---- Oracle ---- */
+const oracleFields = [
+  { enabled:true,  orig:'ORDER_ID',       label:'受注番号',       type:'number', sample:'20039812',           note:'', key:true },
+  { enabled:true,  orig:'CUSTOMER_CODE',  label:'得意先コード',   type:'string', sample:'K-00842',            note:'得意先マスタと結合可' },
+  { enabled:true,  orig:'ITEM_CODE',      label:'品目コード',     type:'string', sample:'M-1042',             note:'品目マスタと結合可' },
+  { enabled:true,  orig:'ORDER_DATE',     label:'受注日',         type:'date',   sample:'2026-03-10',         note:''           },
+  { enabled:true,  orig:'SHIP_DATE',      label:'出荷日',         type:'date',   sample:'2026-03-13',         note:''           },
+  { enabled:true,  orig:'QTY',            label:'数量',           type:'number', sample:'200',                note:''           },
+  { enabled:true,  orig:'UNIT_PRICE',     label:'単価',           type:'number', sample:'1250',               note:'税抜・円'    },
+  { enabled:true,  orig:'AMOUNT',         label:'金額',           type:'number', sample:'250000',             note:'税抜・円'    },
+  { enabled:true,  orig:'TAX_AMT',        label:'消費税額',       type:'number', sample:'25000',              note:''           },
+  { enabled:true,  orig:'STATUS',         label:'ステータス',     type:'string', sample:'出荷済',             note:''           },
+  { enabled:true,  orig:'SALES_DEPT',     label:'営業部門',       type:'string', sample:'西日本第二',         note:''           },
+  { enabled:false, orig:'CREATED_BY',     label:'CREATED_BY',     type:'string', sample:'DBUSER01',           note:'DB登録ユーザー（除外中）' },
+  { enabled:false, orig:'LAST_UPDATED',   label:'LAST_UPDATED',   type:'date',   sample:'2026-03-13T15:22',   note:'Oracle行更新日時（除外中）' },
+  { enabled:false, orig:'ROWID',          label:'ROWID',          type:'string', sample:'AAABzA…',            note:'Oracle内部ROWID（除外中）' },
+];
+
+const rdsFields = [
+  { enabled:true,  orig:'order_id',      label:'受注ID',     type:'number', sample:'20001',           note:'', key:true },
+  { enabled:true,  orig:'customer_code', label:'顧客コード', type:'string', sample:'C-00842',         note:'顧客マスタと結合可' },
+  { enabled:true,  orig:'product_code',  label:'商品コード', type:'string', sample:'P-1042',          note:''           },
+  { enabled:true,  orig:'ordered_at',    label:'受注日時',   type:'date',   sample:'2026-03-10T10:30',note:''           },
+  { enabled:true,  orig:'quantity',      label:'数量',       type:'number', sample:'10',              note:''           },
+  { enabled:true,  orig:'unit_price',    label:'単価',       type:'number', sample:'12000',           note:'税抜'        },
+  { enabled:true,  orig:'discount_rate', label:'割引率',     type:'number', sample:'0.05',            note:'%/100 形式'  },
+  { enabled:true,  orig:'status',        label:'ステータス', type:'string', sample:'shipped',         note:''           },
+  { enabled:true,  orig:'region_code',   label:'地区コード', type:'string', sample:'EAST',            note:''           },
+  { enabled:false, orig:'updated_at',    label:'updated_at', type:'date',   sample:'2026-03-11T…',    note:'DB更新日時（除外中）' },
+  { enabled:false, orig:'is_deleted',    label:'is_deleted', type:'bool',   sample:'false',           note:'論理削除フラグ（除外中）' },
+];
+
+const redshiftFields = [
+  { enabled:true,  orig:'event_id',       label:'イベントID',   type:'string', sample:'evt_a1b2c3d4',    note:'', key:true },
+  { enabled:true,  orig:'event_type',     label:'イベント種別', type:'string', sample:'page_view',       note:'page_view/click/purchase' },
+  { enabled:true,  orig:'session_id',     label:'セッションID', type:'string', sample:'ses_00ff…',       note:''           },
+  { enabled:true,  orig:'user_id',        label:'ユーザーID',   type:'string', sample:'u_98234',         note:''           },
+  { enabled:true,  orig:'event_ts',       label:'イベント日時', type:'date',   sample:'2026-03-20T08:14',note:'UTC'         },
+  { enabled:true,  orig:'page_url',       label:'ページURL',    type:'string', sample:'/products/1042',  note:''           },
+  { enabled:true,  orig:'device_type',    label:'デバイス種別', type:'string', sample:'mobile',          note:'mobile/desktop/tablet' },
+  { enabled:true,  orig:'country_code',   label:'国コード',     type:'string', sample:'JP',              note:'ISO 3166-1'  },
+  { enabled:true,  orig:'revenue',        label:'売上金額',     type:'number', sample:'4800',            note:'購入イベント時のみ' },
+  { enabled:false, orig:'raw_useragent',  label:'raw_useragent',type:'string', sample:'Mozilla/5.0…',    note:'UA文字列（除外中）' },
+  { enabled:false, orig:'partition_date', label:'partition_date',type:'date',  sample:'2026-03-20',      note:'パーティションキー（除外中）' },
+];
+
+const azureSqlFields = [
+  { enabled:true,  orig:'EmployeeID',   label:'従業員ID',   type:'number', sample:'10042',       note:'', key:true },
+  { enabled:true,  orig:'LastName',     label:'姓',         type:'string', sample:'山田',         note:''           },
+  { enabled:true,  orig:'FirstName',    label:'名',         type:'string', sample:'太郎',         note:''           },
+  { enabled:true,  orig:'Department',   label:'部署',       type:'string', sample:'営業部',       note:''           },
+  { enabled:true,  orig:'JobTitle',     label:'役職',       type:'string', sample:'主任',         note:''           },
+  { enabled:true,  orig:'HireDate',     label:'入社日',     type:'date',   sample:'2021-04-01',  note:''           },
+  { enabled:true,  orig:'Salary',       label:'月額給与',   type:'number', sample:'380000',      note:'円'          },
+  { enabled:true,  orig:'IsActive',     label:'在籍フラグ', type:'bool',   sample:'true',        note:''           },
+  { enabled:false, orig:'PasswordHash', label:'PasswordHash',type:'string', sample:'$2b$12$…',   note:'機密情報（除外中）' },
+  { enabled:false, orig:'RowVersion',   label:'RowVersion', type:'string', sample:'0x0000…',     note:'Azure内部楽観ロック（除外中）' },
+];
+
+/* ============================================================
+   TABLE RENDER
+   ============================================================ */
+const typeColors = { number:'tb-num', string:'tb-str', date:'tb-dt', bool:'tb-bool', json:'tb-json' };
+const typeLabels = { number:'🔢 数値', string:'🔤 文字列', date:'📅 日付', bool:'☑️ 真偽値', json:'{ } JSON' };
+
+let fields = [];
+let filterText = '';
+
+function buildFieldTable(data) {
+  fields = data.map(f => ({ ...f }));
+  filterText = '';
+  renderTable();
+}
+
+function filterTable(val) {
+  filterText = val.toLowerCase();
+  renderTable();
+}
+
+function renderTable() {
+  const body = document.getElementById('field-table-body');
+  body.innerHTML = '';
+  let enabledCount = 0;
+  const filtered = fields.filter((f, i) => {
+    f._idx = i;
+    if (!filterText) return true;
+    return f.label.toLowerCase().includes(filterText) || f.orig.toLowerCase().includes(filterText);
+  });
+  fields.forEach(f => { if (f.enabled) enabledCount++; });
+
+  filtered.forEach(f => {
+    const i = f._idx;
+    const row = document.createElement('div');
+    row.className = 'ft-row' + (f.enabled ? '' : ' disabled');
+    row.innerHTML = `
+      <div><div class="toggle ${f.enabled?'on':''}" onclick="toggleRow(${i})"></div></div>
+      <div><input class="field-edit ${f.label!==f.orig?'edited':''}"
+           value="${f.label}" onchange="editLabel(${i},this.value)"
+           ${f.enabled?'':'disabled'}></div>
+      <div><span class="orig-name">${f.orig}</span></div>
+      <div><span class="type-badge ${typeColors[f.type]||'tb-str'}">${typeLabels[f.type]||f.type}</span></div>
+      <div><span class="sample-val">${f.sample}</span></div>
+      <div><input class="field-edit" style="font-size:11px;font-weight:400;color:var(--text-muted)"
+           value="${f.note}" placeholder="メモを追加…" onchange="editNote(${i},this.value)"
+           ${f.enabled?'':'disabled'}></div>
+      <div>${f.key?'<span class="key-icon" title="主キー">🔑</span>':'<span class="row-action" title="除外">✕</span>'}</div>
+    `;
+    body.appendChild(row);
+  });
+
+  document.getElementById('schema-enabled-count').textContent = enabledCount;
+  document.getElementById('schema-total-cols').textContent = fields.length;
+  document.getElementById('pv-cols').textContent = enabledCount + ' / ' + fields.length;
+}
+
+function toggleRow(i)         { fields[i].enabled = !fields[i].enabled; renderTable(); }
+function editLabel(i, val)    { fields[i].label = val; renderTable(); }
+function editNote(i, val)     { fields[i].note = val; }
+function setAllToggle(val)    { fields.forEach(f => f.enabled = val); renderTable(); }
+
+/* ---- Azure Synapse ---- */
+const azureSynapseFields = [
+  { enabled:true,  orig:'fact_date',         label:'集計日',           type:'date',   sample:'2026-03-31',    note:'パーティションキー', key:true },
+  { enabled:true,  orig:'product_category',  label:'商品カテゴリ',     type:'string', sample:'家電',          note:''              },
+  { enabled:true,  orig:'region',            label:'地域',             type:'string', sample:'関東',          note:''              },
+  { enabled:true,  orig:'channel',           label:'販売チャネル',     type:'string', sample:'EC',            note:'EC/店舗/代理店'  },
+  { enabled:true,  orig:'sales_amount',      label:'売上金額',         type:'number', sample:'4820000',       note:'税抜・円'        },
+  { enabled:true,  orig:'units_sold',        label:'販売数量',         type:'number', sample:'312',           note:''              },
+  { enabled:true,  orig:'gross_profit',      label:'粗利益',           type:'number', sample:'1446000',       note:''              },
+  { enabled:true,  orig:'margin_rate',       label:'粗利率',           type:'number', sample:'0.30',          note:'%/100 形式'     },
+  { enabled:true,  orig:'customer_count',    label:'顧客数',           type:'number', sample:'189',           note:'UU数'           },
+  { enabled:true,  orig:'campaign_id',       label:'キャンペーンID',   type:'string', sample:'CP-2026-03',    note:''              },
+  { enabled:false, orig:'etl_load_ts',       label:'etl_load_ts',      type:'date',   sample:'2026-04-01T02:…',note:'ETL処理日時（除外中）' },
+  { enabled:false, orig:'dist_key',          label:'dist_key',         type:'string', sample:'EAST_EC',       note:'Synapse分散キー（除外中）' },
+];
+
+/* ---- MySQL ---- */
+const mysqlFields = [
+  { enabled:true,  orig:'user_id',          label:'ユーザーID',        type:'number', sample:'80421',         note:'', key:true },
+  { enabled:true,  orig:'email',            label:'メールアドレス',    type:'string', sample:'user@example.com',note:''           },
+  { enabled:true,  orig:'plan_type',        label:'プラン',            type:'string', sample:'pro',           note:'free/starter/pro/enterprise' },
+  { enabled:true,  orig:'mrr_amount',       label:'MRR',               type:'number', sample:'9800',          note:'円/月'         },
+  { enabled:true,  orig:'signup_date',      label:'登録日',            type:'date',   sample:'2024-11-15',    note:''              },
+  { enabled:true,  orig:'last_login_at',    label:'最終ログイン日時',  type:'date',   sample:'2026-04-20T09:…',note:''             },
+  { enabled:true,  orig:'login_count',      label:'ログイン回数',      type:'number', sample:'142',           note:''              },
+  { enabled:true,  orig:'is_churned',       label:'解約フラグ',        type:'bool',   sample:'false',         note:''              },
+  { enabled:true,  orig:'country_code',     label:'国コード',          type:'string', sample:'JP',            note:'ISO 3166-1'    },
+  { enabled:false, orig:'password_hash',    label:'password_hash',     type:'string', sample:'$2y$10$…',      note:'機密情報（除外中）' },
+  { enabled:false, orig:'session_token',    label:'session_token',     type:'string', sample:'tok_abc…',      note:'セッション情報（除外中）' },
+  { enabled:false, orig:'updated_at',       label:'updated_at',        type:'date',   sample:'2026-04-21T…',  note:'DB更新日時（除外中）' },
+];
+
+/* ---- REST API (カスタム) ---- */
+const restApiFields = [
+  { enabled:true,  orig:'data.id',           label:'レコードID',       type:'string', sample:'rec_0042',      note:'APIレスポンス .data.id', key:true },
+  { enabled:true,  orig:'data.created_at',   label:'作成日時',         type:'date',   sample:'2026-03-10T…',  note:''              },
+  { enabled:true,  orig:'data.status',       label:'ステータス',       type:'string', sample:'active',        note:''              },
+  { enabled:true,  orig:'data.amount',       label:'金額',             type:'number', sample:'12500',         note:''              },
+  { enabled:true,  orig:'data.currency',     label:'通貨',             type:'string', sample:'JPY',           note:''              },
+  { enabled:true,  orig:'data.user.id',      label:'ユーザーID',       type:'string', sample:'u_9821',        note:'ネストパス'     },
+  { enabled:true,  orig:'data.user.name',    label:'ユーザー名',       type:'string', sample:'田中 太郎',     note:''              },
+  { enabled:true,  orig:'data.tags',         label:'タグ',             type:'json',   sample:'["vip","new"]', note:''              },
+  { enabled:false, orig:'meta.request_id',   label:'meta.request_id',  type:'string', sample:'req_xyz…',      note:'APIメタ情報（除外中）' },
+  { enabled:false, orig:'meta.rate_limit',   label:'meta.rate_limit',  type:'number', sample:'995',           note:'レートリミット残（除外中）' },
+];
+
+buildFieldTable(csvFields);
+
+/* ============================================================
+   MODAL: NEW CONNECTOR
+   ============================================================ */
+function openNewConnector() {
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('test-result').innerHTML = '';
+  initCustomFields();
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+function closeModalOutside(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+/* auth tab switch */
+const authPanels = ['apikey','bearer','basic','oauth2','none'];
+function switchAuth(type) {
+  authPanels.forEach(p => {
+    document.getElementById('auth-' + p).style.display = (p === type) ? '' : 'none';
+  });
+  document.querySelectorAll('.auth-tab').forEach((t, i) => {
+    t.classList.toggle('active', authPanels[i] === type);
+  });
+}
+
+/* type change → show/hide DB fields */
+function onTypeChange(val) {
+  const dbExtra = document.getElementById('fg-db-extra');
+  dbExtra.style.display = val === 'db' ? 'grid' : 'none';
+  document.getElementById('conn-url').placeholder =
+    val === 'db' ? '例: db.mycompany.internal  または  10.0.0.5' : '例: https://api.example.com/v2';
+}
+
+/* custom fields */
+let cfRows = [];
+function initCustomFields() {
+  cfRows = [
+    { path:'data.id',     label:'レコードID',  type:'string' },
+    { path:'data.amount', label:'金額',        type:'number' },
+  ];
+  renderCustomFields();
+}
+function renderCustomFields() {
+  const area = document.getElementById('custom-fields');
+  area.innerHTML = '';
+  cfRows.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'custom-field-row';
+    row.innerHTML = `
+      <input class="form-input" type="text" placeholder="data.field_name" value="${r.path}"
+             onchange="cfRows[${i}].path=this.value">
+      <input class="form-input" type="text" placeholder="表示名" value="${r.label}"
+             onchange="cfRows[${i}].label=this.value">
+      <select class="form-select" style="padding:6px 10px;font-size:11px" onchange="cfRows[${i}].type=this.value">
+        <option value="string"  ${r.type==='string' ?'selected':''}>🔤 文字列</option>
+        <option value="number"  ${r.type==='number' ?'selected':''}>🔢 数値</option>
+        <option value="date"    ${r.type==='date'   ?'selected':''}>📅 日付</option>
+        <option value="bool"    ${r.type==='bool'   ?'selected':''}>☑️ 真偽値</option>
+        <option value="json"    ${r.type==='json'   ?'selected':''}>{ } JSON</option>
+      </select>
+      <div class="cf-remove" onclick="removeCustomField(${i})" title="削除">✕</div>
+    `;
+    area.appendChild(row);
+  });
+}
+function addCustomField() {
+  cfRows.push({ path:'', label:'', type:'string' });
+  renderCustomFields();
+  const inputs = document.querySelectorAll('.custom-field-row .form-input');
+  if (inputs.length) inputs[inputs.length - 2].focus();
+}
+function removeCustomField(i) {
+  cfRows.splice(i, 1);
+  renderCustomFields();
+}
+
+/* test connection (mock) */
+function testConnection() {
+  const el = document.getElementById('test-result');
+  const url = document.getElementById('conn-url').value.trim();
+  if (!url) { el.className='test-result fail'; el.innerHTML='⚠️ URLを入力してください'; return; }
+  el.className='test-result'; el.innerHTML='⏳ テスト中…';
+  setTimeout(() => {
+    el.className='test-result ok';
+    el.innerHTML='✅ 接続成功 — レスポンス 200 OK';
+  }, 1200);
+}
+
+/* save (mock) */
+function saveConnector() {
+  const name = document.getElementById('conn-name-input').value.trim() || '新規コネクタ';
+  closeModal();
+  alert('「' + name + '」を接続リストに追加しました。\nデータ設計タブから項目マッピングを確認してください。');
+}
+</script>
+</body>
+</html>

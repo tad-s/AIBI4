@@ -1632,13 +1632,23 @@ SHOW_HISTORY_DASHBOARD = False
 # Streamlit Cloud (Linux): packages.txt で fonts-noto-cjk をインストール → "Noto Sans CJK JP"
 # ローカル Windows: Meiryo / Yu Gothic にフォールバック
 import matplotlib.font_manager as _fm
-_fm.fontManager.__init__()  # フォントキャッシュを再構築してシステムフォントを認識させる
-_FONT_CANDIDATES = ["Noto Sans CJK JP", "IPAexGothic", "IPAGothic", "Meiryo", "Yu Gothic", "MS Gothic"]
+
+# fontManager.__init__() を直接呼ぶと Python 3.14+ で内部キャッシュが壊れてフォント解決エラーになる。
+# 代わりに新しい FontManager インスタンスを生成して差し替える（正しい再構築方法）。
+try:
+    _fm.fontManager = _fm.FontManager()
+except Exception:
+    pass  # 失敗しても既存インスタンスをそのまま使う
+
+_FONT_CANDIDATES = [
+    "Noto Sans CJK JP", "Noto Sans JP", "NotoSansCJK-Regular",
+    "IPAexGothic", "IPAGothic",
+    "Meiryo", "Yu Gothic", "MS Gothic",
+    "DejaVu Sans",  # matplotlib 同梱の確実なフォント（英字のみ）
+]
 _available_fonts = {f.name for f in _fm.fontManager.ttflist}
-for _font in _FONT_CANDIDATES:
-    if _font in _available_fonts:
-        matplotlib.rcParams["font.family"] = _font
-        break
+_chosen_font = next((_f for _f in _FONT_CANDIDATES if _f in _available_fonts), "sans-serif")
+matplotlib.rcParams["font.family"] = _chosen_font
 matplotlib.rcParams["axes.unicode_minus"] = False
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1891,10 +1901,9 @@ def sanitize_code(code: str) -> str:
         r'\1\2',
         code,
     )
-    # 先頭に日本語フォント強制設定を挿入
-    # Streamlit Cloud: packages.txt で Noto Sans CJK JP がインストール済み
+    # 先頭に日本語フォント強制設定を挿入（起動時に決定した _chosen_font を使う）
     font_fix = (
-        "plt.rcParams['font.family'] = 'Noto Sans CJK JP'\n"
+        f"plt.rcParams['font.family'] = {_chosen_font!r}\n"
         "plt.rcParams['axes.unicode_minus'] = False\n"
     )
     return font_fix + code
