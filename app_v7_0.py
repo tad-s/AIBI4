@@ -1784,6 +1784,11 @@ def build_data_summary(df: pd.DataFrame, filename: str, max_rows: int = 5) -> st
     if "店舗名" in df.columns:
         stores = df["店舗名"].dropna().unique().tolist()
         buf.append(f"店舗({len(stores)}店): {', '.join(map(str, stores[:20]))}")
+    # 商品一覧（全種）
+    if "商品名" in df.columns:
+        items = df["商品名"].dropna().unique().tolist()
+        buf.append(f"商品種類数: {len(items)}")
+        buf.append(f"商品一覧（全{len(items)}種）: {', '.join(map(str, items))}")
     # 列情報 + 数値列の統計
     buf.append("\n【列情報】")
     for col in df.columns:
