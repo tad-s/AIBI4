@@ -699,6 +699,19 @@ def _analysis_3_abc_analysis(df: pd.DataFrame, order_df: pd.DataFrame | None, re
 # ===== 分析④ マーケットバスケット分析（一緒に注文されるメニュー） =====
 # ============================================================
 
+_DRINK_KEYWORDS = [
+    "コーヒー", "ラテ", "エスプレッソ", "カプチーノ", "ティー", "紅茶", "緑茶",
+    "ジュース", "スムージー", "フラペ", "アメリカーノ", "マキアート", "モカ",
+    "カフェオレ", "ソーダ", "レモネード", "ミルク", "ホットチョコ", "ドリンク",
+    "ビール", "サワー", "ハイボール", "日本酒", "ワイン", "チューハイ",
+    "ウーロン", "ウイスキー", "焼酎", "梅酒", "酎ハイ", "ソフトドリンク",
+    "烏龍", "コーラ", "ジンジャー",
+]
+
+def _item_category(name: str) -> str:
+    return "ドリンク" if any(kw in name for kw in _DRINK_KEYWORDS) else "フード"
+
+
 def _analysis_4_basket_analysis(df: pd.DataFrame, order_df: pd.DataFrame | None, return_figs: bool = False):
     """
     return_figs=False: Streamlit に描画（従来動作）
@@ -708,8 +721,8 @@ def _analysis_4_basket_analysis(df: pd.DataFrame, order_df: pd.DataFrame | None,
 
     if not return_figs:
         st.markdown(
-            "同一注文内で一緒に頼まれる商品の組み合わせを集計し、"
-            "共起頻度ヒートマップと上位ペアランキングを表示します。"
+            "同一注文内で一緒に頼まれる商品の組み合わせを集計します。"
+            "全体の共起傾向と、ドリンク×フードのクロスカテゴリ組み合わせを合わせて表示します。"
         )
 
     use_dummy = True
@@ -738,6 +751,7 @@ def _analysis_4_basket_analysis(df: pd.DataFrame, order_df: pd.DataFrame | None,
                     for a, b in combinations(set(filtered), 2):
                         pair_count[tuple(sorted([a, b]))] += 1
 
+                # ─── ① 全体の共起傾向 ───
                 n = len(top_items)
                 mat = np.zeros((n, n))
                 item_idx = {itm: i for i, itm in enumerate(top_items)}
@@ -747,15 +761,15 @@ def _analysis_4_basket_analysis(df: pd.DataFrame, order_df: pd.DataFrame | None,
                         mat[i, j] = cnt
                         mat[j, i] = cnt
 
-                fig, ax = plt.subplots(figsize=(7, 6))
-                im = ax.imshow(mat, cmap="YlOrRd", aspect="auto")
-                ax.set_xticks(range(n))
-                ax.set_yticks(range(n))
+                fig1, ax1 = plt.subplots(figsize=(7, 6))
+                im = ax1.imshow(mat, cmap="YlOrRd", aspect="auto")
+                ax1.set_xticks(range(n))
+                ax1.set_yticks(range(n))
                 short = [itm[:10] for itm in top_items]
-                ax.set_xticklabels(short, rotation=45, ha="right", fontsize=7)
-                ax.set_yticklabels(short, fontsize=7)
-                plt.colorbar(im, ax=ax, shrink=0.8)
-                ax.set_title("商品共起頻度ヒートマップ")
+                ax1.set_xticklabels(short, rotation=45, ha="right", fontsize=7)
+                ax1.set_yticklabels(short, fontsize=7)
+                plt.colorbar(im, ax=ax1, shrink=0.8)
+                ax1.set_title("商品共起頻度ヒートマップ（全体）")
                 plt.tight_layout()
 
                 top_pairs = pair_count.most_common(10)
@@ -764,23 +778,68 @@ def _analysis_4_basket_analysis(df: pd.DataFrame, order_df: pd.DataFrame | None,
                     columns=["商品ペア", "共起件数"],
                 )
 
+                # ─── ② ドリンク×フード クロスカテゴリ ───
+                cross_counter = Counter({
+                    pair: cnt for pair, cnt in pair_count.items()
+                    if _item_category(pair[0]) != _item_category(pair[1])
+                })
+                top_cross = cross_counter.most_common(10)
+                cross_df = pd.DataFrame(
+                    [(f"{a} × {b}", cnt, f"{_item_category(a)} × {_item_category(b)}")
+                     for (a, b), cnt in top_cross],
+                    columns=["商品ペア", "共起件数", "カテゴリ"],
+                )
+
+                fig2 = None
+                if top_cross:
+                    labels = [f"{a} × {b}" for (a, b), _ in top_cross]
+                    vals   = [cnt for _, cnt in top_cross]
+                    fig2, ax2 = plt.subplots(figsize=(7, max(4, len(labels) * 0.45)))
+                    bars = ax2.barh(labels[::-1], vals[::-1], color="#5b9bd5", edgecolor="white")
+                    for bar, v in zip(bars, vals[::-1]):
+                        ax2.text(bar.get_width() + max(vals) * 0.01,
+                                 bar.get_y() + bar.get_height() / 2,
+                                 f"{v}件", va="center", fontsize=8)
+                    ax2.set_xlabel("共起件数")
+                    ax2.set_title("ドリンク × フード クロスカテゴリ Top10")
+                    ax2.set_xlim(0, max(vals) * 1.2)
+                    plt.tight_layout()
+
                 if return_figs:
-                    figs_out.append(("バスケット分析 - 共起頻度ヒートマップ", fig, pair_df))
+                    figs_out.append(("バスケット① 共起頻度ヒートマップ（全体）", fig1, pair_df))
+                    if fig2 is not None:
+                        figs_out.append(("バスケット② ドリンク×フード クロスカテゴリ", fig2, cross_df))
                 else:
+                    st.markdown("#### ① 全体の共起傾向")
                     col_l, col_r = st.columns([3, 2])
                     with col_l:
                         st.markdown("**共起頻度ヒートマップ（上位12商品）**")
-                        st.image(_fig_to_buf(fig), use_container_width=True)
+                        st.image(_fig_to_buf(fig1), use_container_width=True)
                     with col_r:
                         st.markdown("**共起ランキング Top10**")
                         st.dataframe(pair_df, use_container_width=True, hide_index=True)
-                        if top_pairs:
-                            best = top_pairs[0]
-                            st.success(
-                                f"💡 最も一緒に注文される組み合わせ: "
-                                f"**{best[0][0]}** × **{best[0][1]}** "
-                                f"（{best[1]}件）"
-                            )
+                    st.info(
+                        "💡 **全体の傾向**: グループ注文ではテーブル全員がそれぞれドリンクを注文するため、"
+                        "ドリンク同士の組み合わせが上位に入りやすい傾向があります。"
+                        "テーブル単位の注文構造や人気商品の共起パターンを把握するのに有効です。"
+                    )
+
+                    st.markdown("#### ② ドリンク × フード クロスカテゴリ組み合わせ")
+                    if top_cross:
+                        col_l2, col_r2 = st.columns([3, 2])
+                        with col_l2:
+                            st.image(_fig_to_buf(fig2), use_container_width=True)
+                        with col_r2:
+                            st.dataframe(cross_df[["商品ペア", "共起件数"]], use_container_width=True, hide_index=True)
+                        best = top_cross[0]
+                        st.success(
+                            f"💡 **クロスカテゴリ No.1**: "
+                            f"**{best[0][0]}** × **{best[0][1]}** （{best[1]}件）  \n"
+                            "ドリンクとフードをまたいで一緒に注文されやすいペアです。"
+                            "追加注文の促進やセットメニュー設計・卓上POPのヒントになります。"
+                        )
+                    else:
+                        st.info("ドリンク×フードのクロスカテゴリペアが見つかりませんでした。")
 
                 use_dummy = False
         except Exception as e:
