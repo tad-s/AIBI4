@@ -1684,6 +1684,7 @@ for key, default in [
     ("initial_result_text", None), ("graphs", []),
     ("next_graph_id", 1), ("uploaded_filename", None),
     ("show_additional", False), ("show_dashboard", False),
+    ("dataset", "izakaya"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -2298,32 +2299,66 @@ st.divider()
 
 st.markdown("### 📅 DB からデータを取得")
 
+# ── データセット選択 ──────────────────────────────────────────────
+DATASET_CONFIG = {
+    "izakaya": {
+        "rpc_name":     "get_izakaya_sales",
+        "stores_table": "stores",
+        "visits_table": "visits",
+        "label":        "居酒屋（テンアライド）",
+    },
+    "cafe": {
+        "rpc_name":     "get_cafe_sales",
+        "stores_table": "cafe_stores",
+        "visits_table": "cafe_visits",
+        "label":        "カフェ（Cafe Bloom）",
+    },
+}
+
+def _on_dataset_change():
+    for _k in ["df", "summary_text", "chat_history", "initial_result_text",
+               "graphs", "next_graph_id", "uploaded_filename", "show_additional",
+               "sb_stores_df_izakaya", "sb_stores_df_cafe"]:
+        st.session_state.pop(_k, None)
+
+_ds_idx = list(DATASET_CONFIG.keys()).index(st.session_state.get("dataset", "izakaya"))
+dataset_choice = st.selectbox(
+    "📊 データセット",
+    options=list(DATASET_CONFIG.keys()),
+    format_func=lambda k: ("🍺 " if k == "izakaya" else "☕ ") + DATASET_CONFIG[k]["label"],
+    index=_ds_idx,
+    on_change=_on_dataset_change,
+)
+st.session_state["dataset"] = dataset_choice
+ACTIVE_DATASET = DATASET_CONFIG[dataset_choice]
+
 if not SUPABASE_AVAILABLE:
     st.error("supabase_loader モジュールが見つかりません。`pip install supabase` を実行してください。")
 else:
-    # 取得可能月リスト（動的取得、フォールバック付き）
+    # 取得可能月リスト（データセットごとにキャッシュ）
     FALLBACK_MONTHS = ["2024-09", "2024-10", "2025-09", "2025-10"]
 
     @st.cache_data(ttl=300)
-    def _get_available_months():
+    def _get_available_months(visits_table: str):
         try:
             _sb = get_supabase_client()
-            months = fetch_available_months(_sb)
+            months = fetch_available_months(_sb, visits_table=visits_table)
             return months if months else FALLBACK_MONTHS
         except Exception:
             return FALLBACK_MONTHS
 
-    KNOWN_MONTHS = _get_available_months()
+    KNOWN_MONTHS = _get_available_months(ACTIVE_DATASET["visits_table"])
 
-    # 店舗リスト取得（キャッシュ）
-    if "sb_stores_df" not in st.session_state:
+    # 店舗リスト取得（データセットごとにキャッシュ）
+    _stores_key = f"sb_stores_df_{dataset_choice}"
+    if _stores_key not in st.session_state:
         try:
             _sb = get_supabase_client()
-            st.session_state["sb_stores_df"] = sb_fetch_stores(_sb)
+            st.session_state[_stores_key] = sb_fetch_stores(_sb, table=ACTIVE_DATASET["stores_table"])
         except Exception as _e:
-            st.session_state["sb_stores_df"] = pd.DataFrame()
+            st.session_state[_stores_key] = pd.DataFrame()
 
-    df_stores_master = st.session_state.get("sb_stores_df", pd.DataFrame())
+    df_stores_master = st.session_state.get(_stores_key, pd.DataFrame())
 
     col_month, col_store = st.columns([1, 1])
     with col_month:
@@ -2386,7 +2421,7 @@ else:
                     )
 
                 try:
-                    _df_m = sb_fetch_sales_data(_sb, _s, _e, sb_store_ids, progress_callback=_cb)
+                    _df_m = sb_fetch_sales_data(_sb, _s, _e, sb_store_ids, progress_callback=_cb, rpc_name=ACTIVE_DATASET["rpc_name"])
                     if not _df_m.empty:
                         _all_dfs.append(_df_m)
                 except Exception as _ex:
@@ -2398,8 +2433,8 @@ else:
             if _error_months:
                 st.warning(
                     "一部の月でエラーが発生しました:\n" + "\n".join(_error_months) + "\n\n"
-                    "**解決方法:** `etc/supabase_setup.sql` を DB SQL Editor で実行してください。\n"
-                    "（インデックス追加 + `get_izakaya_sales` RPC 関数の作成 + 権限付与）"
+                    f"**解決方法:** `etc/{'cafe_setup.sql' if dataset_choice == 'cafe' else 'supabase_setup.sql'}` を DB SQL Editor で実行してください。\n"
+                    f"（インデックス追加 + `{ACTIVE_DATASET['rpc_name']}` RPC 関数の作成 + 権限付与）"
                 )
 
             if _all_dfs:

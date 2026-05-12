@@ -78,9 +78,9 @@ def get_client() -> Client:
 # 公開 API
 # ──────────────────────────────────────────────
 
-def fetch_stores(client: Client) -> pd.DataFrame:
+def fetch_stores(client: Client, table: str = "stores") -> pd.DataFrame:
     """店舗一覧 DataFrame を返す（store_id, store_name, shop_code, area_layer_name）。"""
-    result = client.table("stores").select(
+    result = client.table(table).select(
         "store_id, store_name, shop_code, area_layer_name"
     ).execute()
     return pd.DataFrame(result.data or [])
@@ -129,14 +129,14 @@ def fetch_visits_for_summary(client: Client) -> pd.DataFrame:
     return df[["store_name", "receipt_no", "visit_time"]]
 
 
-def fetch_available_months(client: Client) -> list[str]:
+def fetch_available_months(client: Client, visits_table: str = "visits") -> list[str]:
     """
     visits テーブルから来店データが存在する月（YYYY-MM 形式）の一覧を返す。
     RLS が有効でデータが読めない場合は空リストを返す。
     """
     try:
         result = (
-            client.table("visits")
+            client.table(visits_table)
             .select("visit_time")
             .not_.is_("visit_time", "null")
             .limit(3000)
@@ -152,7 +152,7 @@ def fetch_available_months(client: Client) -> list[str]:
         return []
 
 
-def _fetch_chunk(chunk_start: str, chunk_end: str, store_ids: list[int] | None) -> list[dict]:
+def _fetch_chunk(chunk_start: str, chunk_end: str, store_ids: list[int] | None, rpc_name: str = "get_izakaya_sales") -> list[dict]:
     """
     1チャンク分のデータを取得する（スレッドごとに独立したクライアントを使用）。
     ThreadPoolExecutor から呼ばれるためスレッドセーフに設計。
@@ -173,7 +173,7 @@ def _fetch_chunk(chunk_start: str, chunk_end: str, store_ids: list[int] | None) 
         for _retry in range(3):  # 502等の一時エラーは最大3回リトライ（指数バックオフ）
             try:
                 result = (
-                    _client.rpc("get_izakaya_sales", params)
+                    _client.rpc(rpc_name, params)
                     .range(offset, offset + RPC_PAGE_SIZE - 1)
                     .execute()
                 )
@@ -182,7 +182,7 @@ def _fetch_chunk(chunk_start: str, chunk_end: str, store_ids: list[int] | None) 
             except Exception as e:
                 err_str = str(e)
                 if (
-                    "get_izakaya_sales" in err_str
+                    rpc_name in err_str
                     or "Could not find" in err_str
                     or "42883" in err_str
                 ):
@@ -210,6 +210,7 @@ def fetch_sales_data(
     end_date: str,                      # "YYYY-MM-DD"
     store_ids: list[int] | None = None,
     progress_callback=None,             # callback(fetched_rows: int) or None
+    rpc_name: str = "get_izakaya_sales",
 ) -> pd.DataFrame:
     """
     指定期間の売上データを Supabase RPC 関数経由で並列取得し、分析用 DataFrame を返す。
@@ -233,7 +234,7 @@ def fetch_sales_data(
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         # 全チャンクを並列サブミット
         future_map = {
-            executor.submit(_fetch_chunk, cs, ce, store_ids): (cs, ce)
+            executor.submit(_fetch_chunk, cs, ce, store_ids, rpc_name): (cs, ce)
             for cs, ce in chunks
         }
         # as_completed はメインスレッドで実行されるためStreamlit UIの更新が安全
