@@ -2305,7 +2305,7 @@ DATASET_CONFIG = {
         "rpc_name":     "get_izakaya_sales",
         "stores_table": "stores",
         "visits_table": "visits",
-        "label":        "居酒屋（テンアライド）",
+        "label":        "居酒屋",
     },
     "cafe": {
         "rpc_name":     "get_cafe_sales",
