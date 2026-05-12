@@ -1853,7 +1853,16 @@ def enhanced_fuzzy_match(query: str, candidates: list[str]) -> str | None:
     return None
 
 
+_INFO_QUERY_PATTERNS = re.compile(
+    r"は何がありますか|何がある|を教えて|一覧|リスト|どんな.{0,6}(商品|メニュー|店舗)|"
+    r"(商品|メニュー|店舗).{0,6}(何|どんな|どのような|種類)|どのような|何種類|何店舗"
+)
+
 def build_fuzzy_context_for_chat(df: pd.DataFrame, user_text: str) -> tuple[str, list[str], dict]:
+    # 一覧確認・情報質問はfuzzyマッチをスキップ（誤補正防止）
+    if _INFO_QUERY_PATTERNS.search(user_text):
+        return user_text, [], {"extra_system": "", "stores": {}, "products": {}}
+
     notes: list[str] = []
     resolved = {"stores": {}, "products": {}}
     store_candidates = _get_unique_values(df, "店舗名")
