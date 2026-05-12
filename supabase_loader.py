@@ -156,7 +156,7 @@ def fetch_available_months(client: Client, visits_table: str = "visits") -> list
             return []
         dates = pd.to_datetime(
             [r["visit_time"] for r in all_rows], errors="coerce", utc=True
-        )
+        ).dt.tz_convert("Asia/Tokyo")
         return sorted({d.strftime("%Y-%m") for d in dates if pd.notna(d)})
     except Exception:
         return []
