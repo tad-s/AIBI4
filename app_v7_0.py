@@ -1021,7 +1021,7 @@ def _analysis_6_stay_time_unit_price(df: pd.DataFrame, order_df: pd.DataFrame | 
                         color="#5b9bd5", edgecolor="white")
                 ax1.set_xlabel("滞在時間帯")
                 ax1.set_ylabel("平均客単価（円）")
-                ax1.set_title("滞在時間帯別 平均客単価（実データ）")
+                ax1.set_title("滞在時間帯別 平均客単価")
                 for i, (v, c) in enumerate(zip(grp["平均客単価"], grp["件数"])):
                     ax1.text(i, v + 50, f"{int(v):,}円\n(n={c})", ha="center", fontsize=8)
                 ax1.tick_params(axis="x", rotation=20)
@@ -1033,18 +1033,18 @@ def _analysis_6_stay_time_unit_price(df: pd.DataFrame, order_df: pd.DataFrame | 
                 ax2.set_xticks(range(len(grp)))
                 ax2.set_xticklabels(grp.index.astype(str), rotation=20, ha="right")
                 ax2.set_ylabel("時間客単価（円/時間）")
-                ax2.set_title("滞在時間帯別 時間客単価（実データ）")
+                ax2.set_title("滞在時間帯別 時間客単価")
 
                 plt.tight_layout()
 
                 if return_figs:
-                    figs_out.append(("滞在時間分析 - 客単価・時間客単価（実データ）",
+                    figs_out.append(("滞在時間分析 - 客単価・時間客単価",
                                      fig_real, grp.reset_index()))
                 else:
                     st.image(_fig_to_buf(fig_real), use_container_width=True)
                     st.success(
-                        "✅ 居酒屋データには来店・退店時刻が含まれているため、"
-                        "**実際の滞在時間**に基づく時間客単価を算出できています。"
+                        "✅ データには来店・退店時刻が含まれているため、"
+                        "滞在時間に基づく時間客単価を算出しています。"
                     )
 
                 # 人数×滞在時間の散布図（人数データがある場合）
