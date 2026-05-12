@@ -2100,26 +2100,28 @@ def call_llm_initial(summary_text: str, user_prompt: str) -> str:
 
 def call_llm_chat(summary_text: str, chat_history: list[dict], extra_system: str = "") -> str:
     system_prompt = (
-        "あなたは『売上データ分析専用』のチャットアシスタントです。\n"
+        "あなたは売上データに関するチャットアシスタントです。\n"
         "アップロードされたCSVデータのサマリーは以下の通りです。\n"
         "==== データサマリー ====\n"
         f"{summary_text}\n"
         "=======================\n\n"
-        "ルール:\n"
-        "・ユーザーの依頼に合ったグラフを1〜3個作り、次を必ず含めて返す：\n"
-        "  - グラフから読み取れる具体的な気づき（箇条書き2〜3個）\n"
-        "  - 追加で行うと良い分析案（箇条書き1〜2個）\n"
-        "  - グラフを描画するための matplotlib 用Pythonコード（```python```ブロック、グラフごとに1ブロック）\n"
-        "  - 前年比・年別比較など複数年を扱う場合は、必ず年ごとに分けた複数グラフを作ること。\n"
-        "・店舗別などカテゴリが多すぎる場合は売上上位10〜20に絞る。\n"
+        "【質問の種類による回答方針】\n"
+        "■ グラフ不要な質問（以下に該当する場合）はテキストのみで回答し、コードブロックは出力しないこと：\n"
+        "  - 商品一覧・店舗一覧の確認（「〜は何がありますか」「〜を教えて」など）\n"
+        "  - データの件数・構造・定義の確認\n"
+        "  - 「セット商品は？」「どんなメニューがある？」などの一覧確認\n"
+        "  - この場合、[AUTO_ANNOTATION] の補正情報は無視してよい\n"
+        "■ グラフが有用な質問（集計・比較・トレンド分析など）は以下のルールでグラフを作成：\n"
+        "  - 1〜3個のグラフを作成し、気づき（箇条書き2〜3個）と追加分析案（1〜2個）を含める\n"
+        "  - 前年比・年別比較など複数年を扱う場合は年ごとに分けた複数グラフを作ること\n"
+        "  - 店舗別などカテゴリが多すぎる場合は売上上位10〜20に絞る\n"
+        "  - グラフ描画コードは必ず ```python ... ``` に入れる\n"
         "・ユーザーに再確認を求めてはいけない。dfから自分で件数や集計を計算する。\n"
-        "・メッセージ末尾に [AUTO_ANNOTATION] が付くことがある。\n"
-        "  そこに『店舗名の補正』『商品名の補正』が書かれている場合は、それを最優先で使う。\n"
-        "【店舗/商品フィルタのルール（重要）】\n"
+        "・メッセージ末尾に [AUTO_ANNOTATION] が付くことがある（グラフ分析時のみ最優先で使用）。\n"
+        "【店舗/商品フィルタのルール（グラフ分析時）】\n"
         "・[AUTO_ANNOTATION] に正式名称がある場合は、まず df の該当列で『==（完全一致）』で絞る。\n"
         "・[AUTO_ANNOTATION] が無い場合のみ contains を許可。\n"
         "・存在する場合は weather_label / weathercode / temperature_2m_* / precipitation_sum / event_score / sns_score を優先的に使った分析も提案する。\n"
-        "・グラフ描画コードは必ず ```python ... ``` に入れる。\n"
         "【コードのルール（重要）】\n"
         "・pandas 2.0+ を使用中のため Series.append() / DataFrame.append() は廃止。必ず pd.concat() を使うこと。\n"
         "・np（numpy）は利用可能。\n"
@@ -2567,7 +2569,7 @@ chat_query = st.text_area(
     placeholder="例）商品別の売り上げ構成を知りたい",
 )
 
-if st.button("チャット内容でグラフを作成する", key="chat_button"):
+if st.button("送信する（分析・質問）", key="chat_button"):
     df_chat = st.session_state.get("df")
     if df_chat is None:
         st.error("先に DB からデータを取得してください。")
@@ -2624,7 +2626,7 @@ if st.button("チャット内容でグラフを作成する", key="chat_button")
         tmp_history = list(st.session_state.get("chat_history", []))
         tmp_history.append({"role": "user", "content": patched_user_text})
 
-        with st.spinner("LLM が分析コメントとグラフコードを生成しています..."):
+        with st.spinner("LLM が回答を生成しています..."):
             try:
                 content = call_llm_chat(summary_text, tmp_history, extra_system=extra_system)
                 code_block = ""
@@ -2648,8 +2650,6 @@ if st.button("チャット内容でグラフを作成する", key="chat_button")
                     st.session_state.setdefault("graphs", []).append(graph)
                     st.session_state["next_graph_id"] = graph["id"] + 1
                     render_graph(graph, df_chat)
-                else:
-                    st.warning("グラフ用の Python コードが応答から抽出できませんでした。")
                 st.session_state.setdefault("chat_history", []).append({"role": "user", "content": patched_user_text})
                 st.session_state["chat_history"].append({"role": "assistant", "content": content})
             except Exception as e:
