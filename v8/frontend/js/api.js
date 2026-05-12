@@ -18,14 +18,14 @@ async function _fetch(url, options = {}) {
   }
 }
 
-export async function getMonths() {
-  const r = await _fetch(`${BASE}/api/months`);
+export async function getMonths(dataset = "cafe") {
+  const r = await _fetch(`${BASE}/api/months?dataset=${encodeURIComponent(dataset)}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
-export async function getStores() {
-  const r = await _fetch(`${BASE}/api/stores`);
+export async function getStores(dataset = "cafe") {
+  const r = await _fetch(`${BASE}/api/stores?dataset=${encodeURIComponent(dataset)}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
@@ -47,12 +47,12 @@ export async function getSessionSummary(sid) {
  * onProgress(done, total, rows, pct) が呼ばれる。
  * 完了時に { rows, columns } を resolve。
  */
-export function fetchData(sid, months, storeIds, onProgress) {
+export function fetchData(sid, months, storeIds, dataset, onProgress) {
   return new Promise((resolve, reject) => {
     fetch(`${BASE}/api/fetch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sid, months, store_ids: storeIds }),
+      body: JSON.stringify({ session_id: sid, months, store_ids: storeIds, dataset }),
     }).then(res => {
       if (!res.ok) { res.text().then(t => reject(new Error(t))); return; }
       const reader = res.body.getReader();

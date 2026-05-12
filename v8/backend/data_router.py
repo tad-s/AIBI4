@@ -30,6 +30,19 @@ RPC_PAGE_SIZE = 1000
 CHUNK_TIMEOUT = 120.0      # 1チャンク最大120秒（httpx レベルで切断）
 _RETRY_STATUS = {502, 503, 504}  # 一時的なサーバーエラーはリトライ
 
+DATASET_CONFIG = {
+    "izakaya": {
+        "rpc_name":     "get_izakaya_sales",
+        "stores_table": "stores",
+        "visits_table": "visits",
+    },
+    "cafe": {
+        "rpc_name":     "get_cafe_sales",
+        "stores_table": "cafe_stores",
+        "visits_table": "cafe_visits",
+    },
+}
+
 
 def _sb_headers() -> dict:
     return {
@@ -56,6 +69,7 @@ async def _fetch_chunk_async(
     chunk_start: str,
     chunk_end: str,
     store_ids: list[int] | None,
+    rpc_name: str = "get_izakaya_sales",
 ) -> list[dict]:
     """httpx.AsyncClient で 1 チャンクを非同期取得（ページネーション + リトライ付き）。"""
     params: dict = {"p_start_date": chunk_start, "p_end_date": chunk_end}
@@ -70,7 +84,7 @@ async def _fetch_chunk_async(
         for attempt in range(3):
             try:
                 resp = await client.post(
-                    f"{SUPABASE_URL}/rest/v1/rpc/get_izakaya_sales",
+                    f"{SUPABASE_URL}/rest/v1/rpc/{rpc_name}",
                     params={"limit": RPC_PAGE_SIZE, "offset": offset},  # Range ヘッダーではなくクエリパラメータで制御
                     json=params,
                     headers={**_sb_headers(), "Prefer": "return=representation"},
@@ -102,21 +116,37 @@ async def _fetch_chunk_async(
 
 
 @router.get("/months")
-async def get_months():
+async def get_months(dataset: str = "cafe"):
+    cfg = DATASET_CONFIG.get(dataset, DATASET_CONFIG["izakaya"])
+    visits_table = cfg["visits_table"]
     try:
+        all_rows: list[dict] = []
+        offset = 0
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                f"{SUPABASE_URL}/rest/v1/visits",
-                params={"select": "visit_time", "visit_time": "not.is.null", "limit": "3000"},
-                headers=_sb_headers(),
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        if not data:
+            while True:
+                resp = await client.get(
+                    f"{SUPABASE_URL}/rest/v1/{visits_table}",
+                    params={
+                        "select": "visit_time",
+                        "visit_time": "not.is.null",
+                        "limit": "1000",
+                        "offset": str(offset),
+                    },
+                    headers=_sb_headers(),
+                )
+                resp.raise_for_status()
+                rows = resp.json()
+                if not rows:
+                    break
+                all_rows.extend(rows)
+                if len(rows) < 1000:
+                    break
+                offset += 1000
+        if not all_rows:
             return {"months": []}
         dates = pd.to_datetime(
-            [r["visit_time"] for r in data], errors="coerce", utc=True
-        )
+            [r["visit_time"] for r in all_rows], errors="coerce", utc=True
+        ).dt.tz_convert("Asia/Tokyo")
         months = sorted({d.strftime("%Y-%m") for d in dates if pd.notna(d)})
         return {"months": months}
     except Exception as e:
@@ -124,11 +154,13 @@ async def get_months():
 
 
 @router.get("/stores")
-async def get_stores():
+async def get_stores(dataset: str = "cafe"):
+    cfg = DATASET_CONFIG.get(dataset, DATASET_CONFIG["izakaya"])
+    stores_table = cfg["stores_table"]
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
-                f"{SUPABASE_URL}/rest/v1/stores",
+                f"{SUPABASE_URL}/rest/v1/{stores_table}",
                 params={"select": "store_id,store_name"},
                 headers=_sb_headers(),
             )
@@ -148,6 +180,7 @@ class FetchRequest(BaseModel):
     session_id: str
     months: list[str]
     store_ids: list[int] | None = None
+    dataset: str = "cafe"
 
 
 @router.post("/fetch")
@@ -157,6 +190,8 @@ async def fetch_data(req: FetchRequest):
         raise HTTPException(status_code=500, detail="SUPABASE_URL / SUPABASE_KEY が未設定です。")
     if not sess.get_session(req.session_id):
         raise HTTPException(status_code=404, detail="セッションが見つかりません。")
+    cfg = DATASET_CONFIG.get(req.dataset, DATASET_CONFIG["izakaya"])
+    rpc_name = cfg["rpc_name"]
 
     from calendar import monthrange
     chunks: list[tuple[str, str]] = []
@@ -181,7 +216,7 @@ async def fetch_data(req: FetchRequest):
 
             async def fetch_one(cs: str, ce: str) -> tuple[str, str, list[dict]]:
                 async with sem:
-                    rows = await _fetch_chunk_async(client, cs, ce, req.store_ids)
+                    rows = await _fetch_chunk_async(client, cs, ce, req.store_ids, rpc_name)
                     return cs, ce, rows
 
             task_map: dict[asyncio.Task, tuple[str, str]] = {

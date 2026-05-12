@@ -11,6 +11,7 @@ let isRecording = false;
 let selectedMonths = new Set();
 let selectedStoreIds = new Set();
 let allStores = [];
+let currentDataset = "cafe";
 
 // ── DOM ──
 const $ = id => document.getElementById(id);
@@ -19,9 +20,6 @@ const storeSearch     = $("store-search");
 const storeList       = $("store-list");
 const storePreview    = $("store-preview");
 const fetchBtn        = $("fetch-btn");
-const progressWrap    = $("progress-wrap");
-const progressFill    = $("progress-fill");
-const progressText    = $("progress-text");
 const sbStatus        = $("sb-status");
 const emptyState      = $("empty-state");
 const fetchState      = $("fetch-state");
@@ -44,6 +42,7 @@ const clearChatBtn    = $("clear-chat-btn");
 const voiceBtn        = $("voice-btn");
 const chatGraphsArea  = $("chat-graphs-area");
 const toastEl         = $("toast");
+const datasetSelect   = $("dataset-select");
 
 // ── Toast ──
 let toastTimer;
@@ -309,7 +308,7 @@ async function init() {
 
   // 月チップ
   try {
-    const { months } = await api.getMonths();
+    const { months } = await api.getMonths(currentDataset);
     renderMonthChips(months);
   } catch (e) {
     showToast(`月一覧の取得に失敗: ${e.message}`, "error");
@@ -318,12 +317,37 @@ async function init() {
 
   // 店舗リスト
   try {
-    const { stores } = await api.getStores();
+    const { stores } = await api.getStores(currentDataset);
     renderStoreList(stores);
   } catch (e) {
     showToast(`店舗一覧の取得に失敗: ${e.message}`, "error");
     storeList.innerHTML = `<div style="font-size:11px;color:var(--danger);padding:6px 8px;">取得失敗</div>`;
   }
+
+  // データセット切り替え
+  datasetSelect.addEventListener("change", async () => {
+    currentDataset = datasetSelect.value;
+    selectedMonths.clear();
+    selectedStoreIds.clear();
+    allStores = [];
+    monthChips.innerHTML = '<span class="chip" style="pointer-events:none;opacity:.5">読み込み中…</span>';
+    storeList.innerHTML = "";
+    loadedState.style.display = "none";
+    emptyState.style.display = "flex";
+    sbStatus.classList.add("hidden");
+    try {
+      const { months } = await api.getMonths(currentDataset);
+      renderMonthChips(months);
+    } catch (e) {
+      showToast(`月一覧の取得に失敗: ${e.message}`, "error");
+    }
+    try {
+      const { stores } = await api.getStores(currentDataset);
+      renderStoreList(stores);
+    } catch (e) {
+      showToast(`店舗一覧の取得に失敗: ${e.message}`, "error");
+    }
+  });
 
   // 音声サポート確認
   if (!VoiceRecorder.isSupported()) {
@@ -371,14 +395,9 @@ async function onFetchClick() {
     `<span class="fp-month-chip" id="fpc-${m}">${m}</span>`
   ).join("");
 
-  // サイドバーのプログレスバーも更新
-  progressWrap.classList.remove("hidden");
-  progressFill.style.width = "0%";
-  progressText.textContent = "接続中…";
-
   try {
     await api.fetchData(
-      sessionId, months, storeIds,
+      sessionId, months, storeIds, currentDataset,
       (done, total, rows, pct, month) => {
         if (done === null) {
           // processing イベント（整形・LLM サマリー生成中）
@@ -386,8 +405,6 @@ async function onFetchClick() {
           fpPct.textContent = "100%";
           fpDetail.textContent = `⏳ ${month}`;
           fpMonths.querySelectorAll(".fp-month-chip").forEach(c => c.classList.add("active"));
-          progressFill.style.width = "100%";
-          progressText.textContent = month;
           return;
         }
         // progress イベント
@@ -398,8 +415,6 @@ async function onFetchClick() {
         fpMonths.querySelectorAll(".fp-month-chip").forEach(c => c.classList.remove("active"));
         const chip = document.getElementById(`fpc-${month}`);
         if (chip) chip.classList.add("active");
-        progressFill.style.width = `${pct}%`;
-        progressText.textContent = `${done}/${total} チャンク完了 (${pct}%)`;
       }
     );
 
@@ -408,8 +423,6 @@ async function onFetchClick() {
     fpPct.textContent = "100%";
     fpDetail.textContent = "✅ 取得完了 — 分析を実行中…";
     fpMonths.querySelectorAll(".fp-month-chip").forEach(c => c.classList.add("active"));
-    progressFill.style.width = "100%";
-    progressText.textContent = "✅ 取得完了";
 
     await new Promise(r => setTimeout(r, 600)); // 完了を一瞬見せる
 
@@ -446,7 +459,6 @@ async function onFetchClick() {
     emptyState.style.display = "flex";
   } finally {
     fetchBtn.disabled = false;
-    setTimeout(() => progressWrap.classList.add("hidden"), 3000);
   }
 }
 
@@ -492,21 +504,46 @@ async function onChatSend() {
   try {
     const result = await api.chat(sessionId, message);
     loadingMsg.remove();
-    if (result.text) appendMsg("assistant", result.text);
+
+    // チャットグラフエリアの empty state を消す
+    const empty = chatGraphsArea.querySelector(".empty-state");
+    if (empty) empty.remove();
+
+    // メインエリアに質問 + 回答テキスト + グラフをまとめて表示
+    const entry = document.createElement("div");
+    entry.className = "chat-entry";
+
+    const qDiv = document.createElement("div");
+    qDiv.className = "chat-entry-question";
+    qDiv.textContent = message;
+    entry.appendChild(qDiv);
+
+    if (result.text) {
+      const aDiv = document.createElement("div");
+      aDiv.className = "chat-entry-answer";
+      aDiv.innerHTML = result.text
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\n/g, "<br>");
+      entry.appendChild(aDiv);
+    }
 
     if (result.graphs?.length) {
-      // チャットグラフエリアの empty state を消す
-      const empty = chatGraphsArea.querySelector(".empty-state");
-      if (empty) empty.remove();
-
-      result.graphs.forEach((g, i) => {
-        const label = `チャットグラフ ${chatGraphsArea.querySelectorAll(".graph-card").length + 1}`;
+      const graphsDiv = document.createElement("div");
+      graphsDiv.className = "chat-entry-graphs";
+      result.graphs.forEach(g => {
+        const cardNum = chatGraphsArea.querySelectorAll(".graph-card").length + 1;
+        const label = `チャットグラフ ${cardNum}`;
         const card = g.image_b64
           ? buildGraphCard(label, g.image_b64, "", null)
           : buildErrorCard(label, g.error || "描画エラー");
-        chatGraphsArea.appendChild(card);
+        graphsDiv.appendChild(card);
       });
+      entry.appendChild(graphsDiv);
     }
+
+    chatGraphsArea.appendChild(entry);
+    entry.scrollIntoView({ behavior: "smooth", block: "start" });
+
   } catch (e) {
     loadingMsg.innerHTML = `❌ ${e.message}`;
     showToast(`チャットエラー: ${e.message}`, "error");
@@ -534,7 +571,7 @@ async function onClearChat() {
     chatGraphsArea.innerHTML = `
       <div class="empty-state" style="padding:40px 0;grid-column:1/-1;">
         <div class="empty-icon" style="font-size:36px;opacity:.3;">💬</div>
-        <div class="empty-desc">左パネルのチャットで分析を指示すると<br>グラフがここに表示されます。</div>
+        <div class="empty-desc">左パネルのチャットで分析を指示すると<br>回答とグラフがここに表示されます。</div>
       </div>`;
     showToast("チャット履歴をクリアしました。", "info");
   } catch (e) {

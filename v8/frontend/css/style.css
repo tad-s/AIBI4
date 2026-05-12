@@ -100,6 +100,21 @@ body { background: var(--bg); color: var(--text); display: flex; overflow: hidde
   margin-bottom: 7px;
 }
 
+/* ── dataset select ── */
+.dataset-select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition);
+}
+.dataset-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
 /* ── month chips ── */
 .chip-group {
   display: flex;
@@ -203,16 +218,6 @@ body { background: var(--bg); color: var(--text); display: flex; overflow: hidde
 .btn-accent { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: white; padding: 8px 16px; width: auto; }
 .btn-sm { padding: 5px 12px; font-size: 12px; }
 
-.progress-wrap { display: flex; flex-direction: column; gap: 5px; }
-.progress-wrap.hidden { display: none; }
-.progress-track { background: var(--surface3); border-radius: 99px; height: 8px; overflow: hidden; border: 1px solid var(--border); }
-.progress-fill {
-  height: 100%; width: 0%;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  border-radius: 99px;
-  transition: width .4s cubic-bezier(.4,0,.2,1);
-}
-.progress-text { font-size: 10.5px; color: var(--text-muted); line-height: 1.4; }
 
 /* ── sidebar chat (bottom fixed) ── */
 .sb-chat {
@@ -644,6 +649,40 @@ details > .table-wrap { padding: 10px; overflow-x: auto; background: var(--surfa
   font-size: 20px;
   font-weight: 800;
   color: var(--text);
+}
+
+/* ── chat entry (main area) ── */
+.chat-entry {
+  grid-column: 1 / -1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.07);
+}
+.chat-entry-question {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-glow);
+  border-radius: var(--radius-sm);
+  padding: 9px 14px;
+  border-left: 3px solid var(--accent);
+}
+.chat-entry-answer {
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.75;
+  padding: 0 4px;
+}
+.chat-entry-answer strong { color: var(--text); }
+.chat-entry-graphs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 14px;
 }
 
 /* ── utility ── */

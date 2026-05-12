@@ -22,6 +22,15 @@
   <!-- スクロール可能コントロールエリア -->
   <div class="sb-controls">
 
+    <!-- データセット選択 -->
+    <div>
+      <div class="ctrl-label">📂 データセット</div>
+      <select id="dataset-select" class="dataset-select">
+        <option value="cafe">カフェ（Cafe Bloom）</option>
+        <option value="izakaya">居酒屋</option>
+      </select>
+    </div>
+
     <!-- 分析期間 (チップ式) -->
     <div>
       <div class="ctrl-label">📅 分析期間</div>
@@ -41,17 +50,11 @@
       <div id="store-preview" class="store-selected-preview"></div>
     </div>
 
-    <!-- 取得ボタン + プログレス -->
+    <!-- 取得ボタン -->
     <div class="fetch-area">
       <button id="fetch-btn" class="btn btn-primary">
         🔄 データを取得する
       </button>
-      <div id="progress-wrap" class="progress-wrap hidden">
-        <div class="progress-track">
-          <div id="progress-fill" class="progress-fill"></div>
-        </div>
-        <div id="progress-text" class="progress-text">取得中…</div>
-      </div>
     </div>
 
   </div><!-- /sb-controls -->
@@ -68,7 +71,7 @@
 
     <div id="chat-msgs" class="chat-msgs">
       <div class="msg msg-assistant" style="opacity:.5;font-size:11px;">
-        データを取得後、ここに分析結果が表示されます。
+        データを取得後、左下のテキストボックスで質問してください。回答はメインエリアに表示されます。
       </div>
     </div>
 
@@ -170,7 +173,7 @@
       <div id="chat-graphs-area" class="graph-grid">
         <div class="empty-state" style="padding:40px 0;grid-column:1/-1;">
           <div class="empty-icon" style="font-size:36px;opacity:.3;">💬</div>
-          <div class="empty-desc">左パネルのチャットで分析を指示すると<br>グラフがここに表示されます。</div>
+          <div class="empty-desc">左パネルのチャットで分析を指示すると<br>回答とグラフがここに表示されます。</div>
         </div>
       </div>
     </div>
