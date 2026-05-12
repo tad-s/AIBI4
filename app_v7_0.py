@@ -338,8 +338,7 @@ def _analysis_1_variable_regression(order_df: pd.DataFrame | None, return_figs: 
             ("注文時間帯", "時間帯"), ("曜日", "曜日"),
             ("FD比率", "FD比率"), ("商品数", "商品数"),
             ("人数", "人数"), ("滞在時間_分", "滞在時間_分"),
-            ("一人単価", "一人単価"), ("合計数量", "合計数量"),
-            ("店内フラグ", "店内フラグ"),
+            ("ドリンク数", "ドリンク数"), ("店内フラグ", "店内フラグ"),
         ]:
             if col in order_df.columns:
                 s = pd.to_numeric(order_df[col], errors="coerce")
