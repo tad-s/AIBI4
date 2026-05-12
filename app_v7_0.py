@@ -2573,101 +2573,105 @@ if st.session_state.get("df") is not None:
 
 st.markdown("---")
 
-# ── 分析指示チャット ──
-st.header("🧠 分析指示チャット（データ分析専用）")
 
+@st.fragment
+def _chat_section():
+    st.header("🧠 分析指示チャット（データ分析専用）")
 
-chat_query = st.text_area(
-    "上記と同じデータについて、追加で知りたいこと・試したい集計を自由に入力してください。",
-    key="chat_query", height=120,
-    placeholder="例）商品別の売り上げ構成を知りたい",
-)
+    chat_query = st.text_area(
+        "上記と同じデータについて、追加で知りたいこと・試したい集計を自由に入力してください。",
+        key="chat_query", height=120,
+        placeholder="例）商品別の売り上げ構成を知りたい",
+    )
 
-if st.button("送信する（分析・質問）", key="chat_button"):
-    df_chat = st.session_state.get("df")
-    if df_chat is None:
-        st.error("先に DB からデータを取得してください。")
-    elif not chat_query.strip():
-        st.error("チャット内容が空です。知りたいことを入力してください。")
-    else:
-        patched_user_text = chat_query
-        fuzzy_notes: list[str] = []
-        extra_system = ""
-        resolved_info = {}
-        try:
-            patched_user_text, fuzzy_notes, resolved_info = build_fuzzy_context_for_chat(df_chat, chat_query)
-            extra_system = resolved_info.get("extra_system", "")
-        except Exception as e:
-            st.warning(f"曖昧マッチ処理中にエラーが発生しましたが、チャット自体は続行します: {e}")
-        if fuzzy_notes:
-            st.info("\n".join(fuzzy_notes))
-        try:
-            store_map = (resolved_info or {}).get("stores", {})
-            if store_map and ("店舗名" in df_chat.columns):
-                src = list(store_map.keys())[0]
-                dst = list(store_map.values())[0]
-                if int((df_chat["店舗名"] == dst).sum()) == 0:
-                    cand = _get_unique_values(df_chat, "店舗名")
-                    dst_norm = normalize_text_for_matching(dst)
-                    hint = [c for c in cand if dst_norm and (dst_norm in normalize_text_for_matching(c))][:10]
-                    st.warning("補正後の店舗名でデータが0件でした。候補を選んで再実行してください。")
-                    if hint:
-                        st.write("候補（クリックでチャット欄に反映）:")
-                        for i, cand_name in enumerate(hint, start=1):
-                            if st.button(f"候補{i}: {cand_name}", key=f"cand_store_{i}"):
-                                original = st.session_state.get("chat_query", "") or chat_query
-                                new_q = original
-                                if src and (src in new_q):
-                                    new_q = new_q.replace(src, cand_name)
-                                elif dst and (dst in new_q):
-                                    new_q = new_q.replace(dst, cand_name)
-                                else:
-                                    new_q = f"{cand_name} の " + new_q
-                                st.session_state["chat_query"] = new_q
-                                st.rerun()
-                    else:
-                        st.info("候補を見つけられませんでした。店舗名一覧を確認してください。")
-                    st.stop()
-        except Exception:
-            pass
-
-        summary_text = st.session_state.get("summary_text")
-        if not summary_text:
-            uploaded_name = st.session_state.get("uploaded_filename") or "uploaded.csv"
-            summary_text = build_data_summary(df_chat, uploaded_name)
-            st.session_state["summary_text"] = summary_text
-
-        tmp_history = list(st.session_state.get("chat_history", []))
-        tmp_history.append({"role": "user", "content": patched_user_text})
-
-        with st.spinner("LLM が回答を生成しています..."):
+    if st.button("送信する（分析・質問）", key="chat_button"):
+        df_chat = st.session_state.get("df")
+        if df_chat is None:
+            st.error("先に DB からデータを取得してください。")
+        elif not chat_query.strip():
+            st.error("チャット内容が空です。知りたいことを入力してください。")
+        else:
+            patched_user_text = chat_query
+            fuzzy_notes: list[str] = []
+            extra_system = ""
+            resolved_info = {}
             try:
-                content = call_llm_chat(summary_text, tmp_history, extra_system=extra_system)
-                code_block = ""
-                comment_block = content or ""
-                if content and "```python" in content:
-                    before, _, rest = content.partition("```python")
-                    code, _, after = rest.partition("```")
-                    code_block = code.strip()
-                    comment_block = (before + "\n\n" + after).strip()
-                if comment_block:
-                    st.subheader("💬 LLMからの分析コメント")
-                    st.markdown(comment_block)
-                if code_block:
-                    st.subheader("📊 チャットで追加生成されたグラフ")
-                    graph = {
-                        "id": st.session_state.get("next_graph_id", 1),
-                        "source": "chat",
-                        "label": f"追加分析グラフ {st.session_state.get('next_graph_id', 1)}",
-                        "code": code_block,
-                    }
-                    st.session_state.setdefault("graphs", []).append(graph)
-                    st.session_state["next_graph_id"] = graph["id"] + 1
-                    render_graph(graph, df_chat)
-                st.session_state.setdefault("chat_history", []).append({"role": "user", "content": patched_user_text})
-                st.session_state["chat_history"].append({"role": "assistant", "content": content})
+                patched_user_text, fuzzy_notes, resolved_info = build_fuzzy_context_for_chat(df_chat, chat_query)
+                extra_system = resolved_info.get("extra_system", "")
             except Exception as e:
-                st.error(f"チャット分析中にエラーが発生しました: {e}")
+                st.warning(f"曖昧マッチ処理中にエラーが発生しましたが、チャット自体は続行します: {e}")
+            if fuzzy_notes:
+                st.info("\n".join(fuzzy_notes))
+            try:
+                store_map = (resolved_info or {}).get("stores", {})
+                if store_map and ("店舗名" in df_chat.columns):
+                    src = list(store_map.keys())[0]
+                    dst = list(store_map.values())[0]
+                    if int((df_chat["店舗名"] == dst).sum()) == 0:
+                        cand = _get_unique_values(df_chat, "店舗名")
+                        dst_norm = normalize_text_for_matching(dst)
+                        hint = [c for c in cand if dst_norm and (dst_norm in normalize_text_for_matching(c))][:10]
+                        st.warning("補正後の店舗名でデータが0件でした。候補を選んで再実行してください。")
+                        if hint:
+                            st.write("候補（クリックでチャット欄に反映）:")
+                            for i, cand_name in enumerate(hint, start=1):
+                                if st.button(f"候補{i}: {cand_name}", key=f"cand_store_{i}"):
+                                    original = st.session_state.get("chat_query", "") or chat_query
+                                    new_q = original
+                                    if src and (src in new_q):
+                                        new_q = new_q.replace(src, cand_name)
+                                    elif dst and (dst in new_q):
+                                        new_q = new_q.replace(dst, cand_name)
+                                    else:
+                                        new_q = f"{cand_name} の " + new_q
+                                    st.session_state["chat_query"] = new_q
+                                    st.rerun()
+                        else:
+                            st.info("候補を見つけられませんでした。店舗名一覧を確認してください。")
+                        st.stop()
+            except Exception:
+                pass
+
+            summary_text = st.session_state.get("summary_text")
+            if not summary_text:
+                uploaded_name = st.session_state.get("uploaded_filename") or "uploaded.csv"
+                summary_text = build_data_summary(df_chat, uploaded_name)
+                st.session_state["summary_text"] = summary_text
+
+            tmp_history = list(st.session_state.get("chat_history", []))
+            tmp_history.append({"role": "user", "content": patched_user_text})
+
+            with st.spinner("LLM が回答を生成しています..."):
+                try:
+                    content = call_llm_chat(summary_text, tmp_history, extra_system=extra_system)
+                    code_block = ""
+                    comment_block = content or ""
+                    if content and "```python" in content:
+                        before, _, rest = content.partition("```python")
+                        code, _, after = rest.partition("```")
+                        code_block = code.strip()
+                        comment_block = (before + "\n\n" + after).strip()
+                    if comment_block:
+                        st.subheader("💬 LLMからの分析コメント")
+                        st.markdown(comment_block)
+                    if code_block:
+                        st.subheader("📊 チャットで追加生成されたグラフ")
+                        graph = {
+                            "id": st.session_state.get("next_graph_id", 1),
+                            "source": "chat",
+                            "label": f"追加分析グラフ {st.session_state.get('next_graph_id', 1)}",
+                            "code": code_block,
+                        }
+                        st.session_state.setdefault("graphs", []).append(graph)
+                        st.session_state["next_graph_id"] = graph["id"] + 1
+                        render_graph(graph, df_chat)
+                    st.session_state.setdefault("chat_history", []).append({"role": "user", "content": patched_user_text})
+                    st.session_state["chat_history"].append({"role": "assistant", "content": content})
+                except Exception as e:
+                    st.error(f"チャット分析中にエラーが発生しました: {e}")
+
+
+_chat_section()
 
 st.markdown("---")
 
