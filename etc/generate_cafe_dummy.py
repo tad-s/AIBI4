@@ -5,7 +5,10 @@ generate_cafe_dummy.py
 
 実行前提:
   1. etc/cafe_setup.sql を Supabase SQL Editor で実行済みであること
-  2. C:\\Users\\tarchi\\AIBI4\\.env に SUPABASE_URL / SUPABASE_KEY が設定済みであること
+  2. C:\\Users\\tarchi\\AIBI4\\.env に以下を設定済みであること:
+       SUPABASE_URL=...
+       SUPABASE_SERVICE_KEY=eyJ...  ← service_role キー（RLS バイパスに必要）
+     ※ service_role キーは Supabase Dashboard → Settings → API → service_role (secret)
 
 実行方法（AIBI4 ルートから）:
   python etc/generate_cafe_dummy.py
@@ -41,12 +44,23 @@ except ImportError:
     sys.exit(1)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
-if not SUPABASE_URL or not SUPABASE_KEY:
-    print("ERROR: .env に SUPABASE_URL / SUPABASE_KEY が設定されていません。")
+# データ投入には RLS をバイパスできる service_role キーが必要
+# Supabase Dashboard → Settings → API → service_role (secret) をコピーして .env に追加:
+#   SUPABASE_SERVICE_KEY=eyJ...
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+
+if not SUPABASE_URL:
+    print("ERROR: .env に SUPABASE_URL が設定されていません。")
+    sys.exit(1)
+if not SUPABASE_SERVICE_KEY:
+    print("ERROR: .env に SUPABASE_SERVICE_KEY が設定されていません。")
+    print()
+    print("  Supabase Dashboard → Settings → API → service_role (secret) キーをコピーして")
+    print("  C:\\Users\\tarchi\\AIBI4\\.env に以下の行を追加してください:")
+    print("    SUPABASE_SERVICE_KEY=eyJ...")
     sys.exit(1)
 
-client = create_client(SUPABASE_URL, SUPABASE_KEY)
+client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 random.seed(42)
 
 JST   = timezone(timedelta(hours=9))
