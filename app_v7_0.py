@@ -1684,7 +1684,7 @@ for key, default in [
     ("initial_result_text", None), ("graphs", []),
     ("next_graph_id", 1), ("uploaded_filename", None),
     ("show_additional", False), ("show_dashboard", False),
-    ("dataset", "izakaya"),
+    ("dataset", "cafe"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -2321,7 +2321,7 @@ def _on_dataset_change():
                "sb_stores_df_izakaya", "sb_stores_df_cafe"]:
         st.session_state.pop(_k, None)
 
-_ds_idx = list(DATASET_CONFIG.keys()).index(st.session_state.get("dataset", "izakaya"))
+_ds_idx = list(DATASET_CONFIG.keys()).index(st.session_state.get("dataset", "cafe"))
 dataset_choice = st.selectbox(
     "📊 データセット",
     options=list(DATASET_CONFIG.keys()),
