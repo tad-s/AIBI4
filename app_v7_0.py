@@ -2375,7 +2375,7 @@ else:
             selected_store_names = st.multiselect(
                 "店舗を絞り込む（空=全店舗）",
                 options=store_options,
-                key="sb_stores",
+                key=f"sb_stores_{dataset_choice}",
             )
             if selected_store_names and "store_id" in df_stores_master.columns:
                 sb_store_ids = df_stores_master.loc[
