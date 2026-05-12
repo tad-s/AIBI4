@@ -168,6 +168,12 @@ SLOT_HOURS = {
     "cafe":    (14, 18),
     "dinner":  (17, 21),
 }
+SLOT_STAY = {
+    "morning": (20, 45),
+    "lunch":   (35, 65),
+    "cafe":    (50, 90),
+    "dinner":  (70, 130),
+}
 
 
 # ──────────────────────────────────────────────────────────────
@@ -381,7 +387,7 @@ def step4_visits_orders_items(stores: list[dict]) -> None:
                     h = random.randint(h_s, h_e - 1)
                     m = random.randint(0, 59)
                     visit_dt = datetime(cur.year, cur.month, cur.day, h, m, tzinfo=JST)
-                    leave_dt = visit_dt + timedelta(minutes=random.randint(25, 100))
+                    leave_dt = visit_dt + timedelta(minutes=random.randint(*SLOT_STAY[slot]))
                     order_dt = visit_dt + timedelta(minutes=random.randint(3, 10))
 
                     rcpt_counter += 1

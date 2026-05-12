@@ -569,20 +569,20 @@ def analysis_6_stay_time(order_df: pd.DataFrame | None) -> list[dict]:
                 ax1.bar(grp.index.astype(str), grp["平均客単価"], color="#5b9bd5", edgecolor="white")
                 ax1.set_xlabel("滞在時間帯")
                 ax1.set_ylabel("平均客単価（円）")
-                ax1.set_title("滞在時間帯別 平均客単価（実データ）")
+                ax1.set_title("滞在時間帯別 平均客単価")
                 ax1.tick_params(axis="x", rotation=20)
                 ax2.plot(range(len(grp)), grp["時間客単価"].values, marker="o", color="#e74c3c", linewidth=2)
                 ax2.fill_between(range(len(grp)), grp["時間客単価"].values, alpha=0.2, color="#e74c3c")
                 ax2.set_xticks(range(len(grp)))
                 ax2.set_xticklabels(grp.index.astype(str), rotation=20, ha="right")
                 ax2.set_ylabel("時間客単価（円/時間）")
-                ax2.set_title("滞在時間帯別 時間客単価（実データ）")
+                ax2.set_title("滞在時間帯別 時間客単価")
                 plt.tight_layout()
 
                 results.append({
-                    "title": "分析⑥ 滞在時間 × 客単価（実データ）",
+                    "title": "分析⑥ 滞在時間 × 客単価",
                     "image_b64": _fig_to_b64(fig),
-                    "insight": "居酒屋の実際の来店・退店時刻から算出した滞在時間別の客単価と時間効率を表示しています。",
+                    "insight": "データには来店・退店時刻が含まれているため、滞在時間に基づく時間客単価を算出しています。",
                     "table": grp.reset_index().to_dict("records"),
                 })
                 return results
