@@ -1,0 +1,31 @@
+# 仮想環境
+v8/backend/.venv/
+**/.venv/
+**/venv/
+
+# Python キャッシュ
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# 秘密情報
+.env
+.env.bak
+
+# V8 デプロイに不要なファイル（V7 Streamlit アプリ）
+app_v7_0.py
+supabase_loader.py
+requirements.txt
+build_summary_cache.py
+fetch_weather_for_stores.py
+geocode_stores.py
+
+# データ・ドキュメント
+data/
+etc/
+docs/
+
+# Git
+.git/
+.gitignore
