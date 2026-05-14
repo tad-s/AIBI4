@@ -11,7 +11,7 @@ let isRecording = false;
 let selectedMonths = new Set();
 let selectedStoreIds = new Set();
 let allStores = [];
-let currentDataset = "cafe";
+let currentDataset = "izakaya";
 
 // ── DOM ──
 const $ = id => document.getElementById(id);
