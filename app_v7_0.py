@@ -2074,6 +2074,10 @@ def sanitize_code(code: str) -> str:
         # LLMがフォントを上書きする行を除去（文字化け防止）
         if "rcParams" in stripped and "font" in stripped:
             continue
+        # LLMがローカルCSV/Excelを読もうとする行を除去（df は既にメモリ上にある）
+        if _re.search(r'pd\.read_csv\s*\(|pd\.read_excel\s*\(|open\s*\(', stripped):
+            cleaned_lines.append("# [removed: file read blocked — use df variable]")
+            continue
         cleaned_lines.append(line)
     code = "\n".join(cleaned_lines)
     # pandas 2.0+ で廃止された .append() を pd.concat() に自動変換
@@ -2229,10 +2233,13 @@ def call_llm_initial(summary_text: str, user_prompt: str) -> str:
 def call_llm_chat(summary_text: str, chat_history: list[dict], extra_system: str = "") -> str:
     system_prompt = (
         "あなたは売上データに関するチャットアシスタントです。\n"
-        "アップロードされたCSVデータのサマリーは以下の通りです。\n"
+        "取得済みの売上データのサマリーは以下の通りです。\n"
         "==== データサマリー ====\n"
         f"{summary_text}\n"
         "=======================\n\n"
+        "【絶対禁止事項】\n"
+        "・pd.read_csv() / pd.read_excel() / open() などでファイルを読み込んではいけない\n"
+        "・データは既に変数 df としてメモリ上に読み込まれている。必ず df をそのまま使うこと\n\n"
         "【質問の種類による回答方針】\n"
         "■ グラフ不要な質問（以下に該当する場合）はテキストのみで回答し、コードブロックは出力しないこと：\n"
         "  - 商品一覧・店舗一覧の確認（「〜は何がありますか」「〜を教えて」など）\n"

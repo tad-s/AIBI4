@@ -191,6 +191,10 @@ def sanitize_code(code: str) -> str:
             continue
         if "rcParams" in s and "font" in s:
             continue
+        # ローカルファイル読み込みを除去（df は既にメモリ上にある）
+        if re.search(r'pd\.read_csv\s*\(|pd\.read_excel\s*\(|open\s*\(', s):
+            cleaned.append("# [removed: file read blocked — use df variable]")
+            continue
         cleaned.append(line)
     code = "\n".join(cleaned)
     code = re.sub(
@@ -256,10 +260,13 @@ def call_llm_chat(summary_text: str, chat_history: list[dict],
                   extra_system: str = "") -> str:
     system_prompt = (
         "あなたは売上データに関するチャットアシスタントです。\n"
-        "アップロードされたデータのサマリーは以下の通りです。\n"
+        "取得済みの売上データのサマリーは以下の通りです。\n"
         "==== データサマリー ====\n"
         f"{summary_text}\n"
         "=======================\n\n"
+        "【絶対禁止事項】\n"
+        "・pd.read_csv() / pd.read_excel() / open() などでファイルを読み込んではいけない\n"
+        "・データは既に変数 df としてメモリ上に読み込まれている。必ず df をそのまま使うこと\n\n"
         "【質問の種類による回答方針】\n"
         "■ グラフ不要な質問（以下に該当する場合）はテキストのみで回答し、コードブロックは出力しないこと：\n"
         "  - 商品一覧・店舗一覧の確認（「〜は何がありますか」「〜を教えて」など）\n"
