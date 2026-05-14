@@ -150,7 +150,7 @@ async def get_months(dataset: str = "cafe"):
         dates = pd.to_datetime(
             [r["visit_time"] for r in all_rows if r.get("visit_time")],
             errors="coerce", utc=True
-        ).dt.tz_convert("Asia/Tokyo")
+        ).tz_convert("Asia/Tokyo")
         months = sorted({d.strftime("%Y-%m") for d in dates if pd.notna(d)})
         return {"months": months}
     except HTTPException:
