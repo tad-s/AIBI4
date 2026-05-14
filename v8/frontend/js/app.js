@@ -182,7 +182,7 @@ function showSkeletons(n = 6) {
 }
 
 // ── グラフカード ──
-function buildGraphCard(title, imageB64, insight, table) {
+function buildGraphCard(title, imageB64, insight, table, insights, advice) {
   const card = document.createElement("div");
   card.className = "graph-card";
 
@@ -215,11 +215,49 @@ function buildGraphCard(title, imageB64, insight, table) {
   img.loading = "lazy";
   card.appendChild(img);
 
-  // インサイト
-  if (insight) {
+  // 知見・アドバイス（2列レイアウト）または従来の insight 表示
+  const md = t => t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  if (insights && insights.length > 0) {
+    const ia = document.createElement("div");
+    ia.className = "insight-advice-block";
+
+    const insCol = document.createElement("div");
+    insCol.className = "ia-insights";
+    const insLabel = document.createElement("div");
+    insLabel.className = "ia-label";
+    insLabel.textContent = "📌 読み取れる知見";
+    insCol.appendChild(insLabel);
+    const insList = document.createElement("ul");
+    for (const line of insights) {
+      const li = document.createElement("li");
+      li.innerHTML = md(line);
+      insList.appendChild(li);
+    }
+    insCol.appendChild(insList);
+    ia.appendChild(insCol);
+
+    if (advice && advice.length > 0) {
+      const advCol = document.createElement("div");
+      advCol.className = "ia-advice";
+      const advLabel = document.createElement("div");
+      advLabel.className = "ia-label";
+      advLabel.textContent = "💼 アドバイス";
+      advCol.appendChild(advLabel);
+      const advList = document.createElement("ul");
+      for (const line of advice) {
+        const li = document.createElement("li");
+        li.innerHTML = md(line);
+        advList.appendChild(li);
+      }
+      advCol.appendChild(advList);
+      ia.appendChild(advCol);
+    }
+
+    card.appendChild(ia);
+  } else if (insight) {
     const ins = document.createElement("div");
     ins.className = "graph-insight";
-    ins.innerHTML = "💡 " + insight.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    ins.innerHTML = "💡 " + md(insight);
     card.appendChild(ins);
   }
 
@@ -471,7 +509,7 @@ async function runBuiltinAnalysis() {
     analysisGrid.innerHTML = "";
     analyses.forEach(a => {
       const card = a.image_b64
-        ? buildGraphCard(a.title, a.image_b64, a.insight, a.table)
+        ? buildGraphCard(a.title, a.image_b64, a.insight, a.table, a.insights, a.advice)
         : buildErrorCard(a.title, a.insight || "グラフ生成エラー");
       analysisGrid.appendChild(card);
     });

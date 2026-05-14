@@ -299,6 +299,19 @@ def _dummy_bar(ax, labels, values, title, xlabel="", ylabel="影響度合い", h
     ax.set_ylim(0, max(abs(v) for v in values) * 1.3)
 
 
+def _insight_advice_block(insight_lines: list[str], advice_lines: list[str]) -> None:
+    """📌 知見 + 💼 アドバイス の2列ブロックを表示する。"""
+    col_l, col_r = st.columns(2)
+    with col_l:
+        st.markdown("**📌 読み取れる知見**")
+        for line in insight_lines:
+            st.markdown(f"- {line}")
+    with col_r:
+        st.markdown("**💼 アドバイス**")
+        for line in advice_lines:
+            st.markdown(f"- {line}")
+
+
 # ============================================================
 # ===== 分析① 客単価に影響を与える変数の特定（重回帰分析） =====
 # ============================================================
@@ -380,8 +393,33 @@ def _analysis_1_variable_regression(order_df: pd.DataFrame | None, return_figs: 
                 else:
                     st.image(_fig_to_buf(fig), use_container_width=True)
                     top = sorted_names[0]
-                    direction = "正の方向（客単価UP）" if sorted_coef[0] > 0 else "負の方向（客単価DOWN）"
-                    st.success(f"💡 **{top}** が客単価に最も影響しています（{direction}）。")
+                    dir0 = "客単価UP方向" if sorted_coef[0] > 0 else "客単価DOWN方向"
+                    insights = [
+                        f"**{top}** が客単価に最も強く影響（{dir0}）",
+                    ]
+                    if len(sorted_names) >= 2:
+                        dir1 = "UP方向" if sorted_coef[1] > 0 else "DOWN方向"
+                        insights.append(f"2位: **{sorted_names[1]}**（{dir1}）")
+                    up_vars = [n for n, c in zip(sorted_names, sorted_coef) if c > 0]
+                    dn_vars = [n for n, c in zip(sorted_names, sorted_coef) if c < 0]
+                    if up_vars:
+                        insights.append(f"客単価を上げる傾向の変数: {', '.join(up_vars[:3])}")
+                    if dn_vars:
+                        insights.append(f"客単価を下げる傾向の変数: {', '.join(dn_vars[:3])}")
+                    advice = []
+                    if "FD比率" in up_vars:
+                        advice.append("FD比率（フード/ドリンクの比率）が高いほど客単価UP → ドリンク注文を促すオペレーションが有効")
+                    if "滞在時間_分" in up_vars:
+                        advice.append("滞在時間が長いほど客単価UP → 長時間滞在を促すイベントや居心地改善が売上向上につながる")
+                    if "人数" in up_vars:
+                        advice.append("来客人数が多いほど客単価UP → グループ来店の促進施策（宴会パック、グループ割引）が有効")
+                    if "商品数" in up_vars:
+                        advice.append("注文商品数が多いほど客単価UP → 追加注文を促す卓上POPやスタッフ声がけが効果的")
+                    if "注文時間帯" in sorted_names[:3]:
+                        advice.append("時間帯が客単価に影響 → 時間帯別メニューや限定商品で高単価帯の来客を増やす施策を検討")
+                    if not advice:
+                        advice.append(f"影響度1位の **{top}** を起点に、客単価向上施策の優先順位を設定する")
+                    _insight_advice_block(insights, advice)
                 use_dummy = False
 
     if use_dummy:
@@ -404,7 +442,10 @@ def _analysis_1_variable_regression(order_df: pd.DataFrame | None, return_figs: 
             figs_out.append(("客単価への影響度（重回帰分析）※ダミーデータ", fig, coef_df))
         else:
             st.image(_fig_to_buf(fig), use_container_width=True)
-            st.info("💡 ダミーデータ例：「注文商品」「FD比率」「注文時間帯」が客単価に大きく影響。")
+            _insight_advice_block(
+                ["注文商品・FD比率・注文時間帯が客単価に大きく影響（ダミー例）"],
+                ["ドリンク注文の促進（FD比率向上）や時間帯別施策が客単価UPに有効と想定"],
+            )
 
     if return_figs:
         return figs_out
@@ -487,13 +528,19 @@ def _analysis_2_product_regression(df: pd.DataFrame, order_df: pd.DataFrame | No
                         st.image(_fig_to_buf(fig), use_container_width=True)
                         pos_items = [show_names[i] for i, c in enumerate(show_coef) if c > 0]
                         neg_items = [show_names[i] for i, c in enumerate(show_coef) if c < 0]
-                        msg = ""
+                        insights = []
+                        advice = []
                         if pos_items:
-                            msg += f"**客単価UP商品:** {', '.join(pos_items[:3])} など  \n"
+                            insights.append(f"**客単価UP商品**: {', '.join(pos_items[:3])} — これらを注文した客ほど伝票単価が高い傾向")
+                            advice.append(f"「{pos_items[0]}」などUP商品をおすすめ欄・卓上POPで前面に出し、追加注文を促す")
                         if neg_items:
-                            msg += f"**客単価DOWN商品（炭水化物系等）:** {', '.join(neg_items[:3])} など"
-                        if msg:
-                            st.success(f"💡 {msg}")
+                            insights.append(f"**客単価DOWN商品**: {', '.join(neg_items[:3])} — 炭水化物系など「締め」商品は満腹感で他の注文を減らす傾向")
+                            advice.append(f"「{neg_items[0]}」などDOWN商品は単体推奨より、UP商品とのセット提案で客単価を維持する")
+                        if not insights:
+                            insights.append("分析結果から有意な傾向が確認されました")
+                        if not advice:
+                            advice.append("UP商品の推奨強化と、DOWN商品のセット販売を組み合わせた施策を検討")
+                        _insight_advice_block(insights, advice)
                     use_dummy = False
         except Exception as e:
             if not return_figs:
@@ -524,9 +571,15 @@ def _analysis_2_product_regression(df: pd.DataFrame, order_df: pd.DataFrame | No
             figs_out.append(("商品別 客単価への影響度（重回帰分析）※ダミーデータ", fig, coef_df))
         else:
             st.image(_fig_to_buf(fig), use_container_width=True)
-            st.info(
-                "💡 ダミー例：「もつ煮込み」「なめろう」「牛たんタタキ」は客単価UPに寄与。"
-                "「牛たん焼きそば」は逆相関（炭水化物で満腹 → 他メニュー注文減）。"
+            _insight_advice_block(
+                [
+                    "客単価UP商品（ダミー例）: もつ煮込み、なめろう、牛たんタタキ — 高単価客ほど頼む傾向",
+                    "客単価DOWN商品（ダミー例）: 牛たん焼きそば — 炭水化物系は満腹感で他注文を減らす傾向",
+                ],
+                [
+                    "UP商品をおすすめメニュー欄・卓上POPで強調し、注文率を上げる",
+                    "DOWN商品（炭水化物系）はコース終盤に位置づけ、早期注文を避ける声がけが有効",
+                ],
             )
 
     if return_figs:
@@ -616,10 +669,22 @@ def _analysis_3_abc_analysis(df: pd.DataFrame, order_df: pd.DataFrame | None, re
                 with col_r:
                     st.markdown("**グループ別 売上貢献商品 Top5**")
                     st.image(_fig_to_buf(fig2), use_container_width=True)
-                st.success(
-                    f"💡 全体平均客単価: **{avg_all:,.0f}円**  \n"
-                    f"高単価グループ（A）の平均: {group_stats.loc['高（A）', '平均客単価']:,.0f}円 "
-                    f"/ 低単価グループ（C）の平均: {group_stats.loc['低（C）', '平均客単価']:,.0f}円"
+                a_avg = group_stats.loc["高（A）", "平均客単価"]
+                c_avg = group_stats.loc["低（C）", "平均客単価"]
+                gap = a_avg - c_avg
+                a_cnt = int(group_stats.loc["高（A）", "件数"])
+                c_cnt = int(group_stats.loc["低（C）", "件数"])
+                _insight_advice_block(
+                    [
+                        f"全体平均客単価: **{avg_all:,.0f}円**",
+                        f"高単価グループ（A）平均: {a_avg:,.0f}円（{a_cnt}件） / 低単価グループ（C）平均: {c_avg:,.0f}円（{c_cnt}件）",
+                        f"A・C間の客単価差は **{gap:,.0f}円** — 上位客の購買行動が売上を大きく左右している",
+                    ],
+                    [
+                        f"低単価グループ（C）客に追加注文を促す施策（{c_avg:,.0f}円 → 中間帯への引き上げ）が全体売上向上に直結",
+                        "Cグループに人気のサイドメニューやデザートを低価格帯で提案し、購入点数を増やす",
+                        "Aグループのリピート来店を促進（ポイントカード、優待案内）し高単価客の離脱を防ぐ",
+                    ],
                 )
 
             use_dummy_timing = False
@@ -831,11 +896,18 @@ def _analysis_4_basket_analysis(df: pd.DataFrame, order_df: pd.DataFrame | None,
                         with col_r2:
                             st.dataframe(cross_df[["商品ペア", "共起件数"]], use_container_width=True, hide_index=True)
                         best = top_cross[0]
-                        st.success(
-                            f"💡 **クロスカテゴリ No.1**: "
-                            f"**{best[0][0]}** × **{best[0][1]}** （{best[1]}件）  \n"
-                            "ドリンクとフードをまたいで一緒に注文されやすいペアです。"
-                            "追加注文の促進やセットメニュー設計・卓上POPのヒントになります。"
+                        top3_cross = [f"{a} × {b}" for (a, b), _ in top_cross[:3]]
+                        _insight_advice_block(
+                            [
+                                f"クロスカテゴリ No.1: **{best[0][0]}** × **{best[0][1]}**（{best[1]}件）",
+                                f"上位3ペア: {', '.join(top3_cross)} — これらがセット注文の核心",
+                                "ドリンク×フードの組み合わせは、テーブル全体の注文量拡大に直結するシグナル",
+                            ],
+                            [
+                                f"「{best[0][0]}」×「{best[0][1]}」をセットメニュー化し、単品注文より割安感を演出する",
+                                "上位クロスペアを卓上POPや口頭推奨に活用し、追加注文率を高める",
+                                "フードを注文した客にドリンクを勧める（またはその逆）スクリプトをスタッフに共有",
+                            ],
                         )
                     else:
                         st.info("ドリンク×フードのクロスカテゴリペアが見つかりませんでした。")
@@ -964,17 +1036,35 @@ def _analysis_5_heavy_light(df: pd.DataFrame, order_df: pd.DataFrame | None, ret
                     if "ヘビー系" in grp.index and "ライト系" in grp.index:
                         h_avg = grp.loc["ヘビー系", "平均客単価"]
                         l_avg = grp.loc["ライト系", "平均客単価"]
+                        h_cnt = int(grp.loc["ヘビー系", "件数"])
+                        l_cnt = int(grp.loc["ライト系", "件数"])
                         if h_avg > l_avg:
-                            st.success(
-                                f"💡 ヘビー系を注文する客の平均客単価（{h_avg:,.0f}円）は"
-                                f"ライト系（{l_avg:,.0f}円）より高い傾向。"
-                                "アップセル機会として大きいサイズへの誘導が有効と考えられます。"
+                            diff = h_avg - l_avg
+                            _insight_advice_block(
+                                [
+                                    f"ヘビー系客の平均客単価（{h_avg:,.0f}円 / {h_cnt}件）はライト系（{l_avg:,.0f}円 / {l_cnt}件）より **{diff:,.0f}円高い**",
+                                    "揚げ物・大きいサイズを選ぶ客ほど全体的に注文量が多い傾向",
+                                    "ヘビー系客はコース外での追加注文も積極的に行う可能性が高い",
+                                ],
+                                [
+                                    "ヘビー系商品（揚げ物・大サイズ）を注文した客に追加ドリンクや締めメニューを積極的に提案",
+                                    "大盛り・サイズアップオプションを設けてアップセルを促進",
+                                    "ヘビー系客の来店率を高める「がっつり系」コースやランチ限定大盛りメニューを検討",
+                                ],
                             )
                         else:
-                            st.success(
-                                f"💡 ライト系を注文する客の平均客単価（{l_avg:,.0f}円）は"
-                                f"ヘビー系（{h_avg:,.0f}円）より高い傾向。"
-                                "ライト系客は品数を多く注文する傾向があると考えられます。"
+                            diff = l_avg - h_avg
+                            _insight_advice_block(
+                                [
+                                    f"ライト系客の平均客単価（{l_avg:,.0f}円 / {l_cnt}件）はヘビー系（{h_avg:,.0f}円 / {h_cnt}件）より **{diff:,.0f}円高い**",
+                                    "ライト系客は1品あたりの量より品数を多く注文する傾向 — 薄利多売型の購買パターン",
+                                    "サラダ・小皿系メニューを起点に多品注文が発生している可能性",
+                                ],
+                                [
+                                    "ライト系メニューのバリエーションを増やし、多品注文を誘発する品揃えにする",
+                                    "小皿・シェアメニューをグループ向けにセット提案し、品数増加を促す",
+                                    "ライト系客向けに「おまかせ小皿コース」など多品構成のコースを用意する",
+                                ],
                             )
                 use_dummy = False
         except Exception as e:
@@ -1014,9 +1104,15 @@ def _analysis_5_heavy_light(df: pd.DataFrame, order_df: pd.DataFrame | None, ret
             figs_out.append(("ヘビー/ライト分析（ダミーデータ）", fig_d, dummy_df))
         else:
             st.image(_fig_to_buf(fig_d), use_container_width=True)
-            st.info(
-                "💡 ダミー例：ヘビー系（揚げ物・大サイズ）を注文する客は客単価が最も高い傾向。"
-                "大きいサイズへのアップグレード誘導が客単価向上に有効と考えられます。"
+            _insight_advice_block(
+                [
+                    "ヘビー系（揚げ物・大サイズ）客の客単価が最も高い傾向（ダミー例）",
+                    "ライト系客も品数が多く、一定の客単価を維持している",
+                ],
+                [
+                    "大きいサイズへのアップグレード誘導で客単価向上が見込める（ダミー想定）",
+                    "ライト系客には多品注文を促す小皿セットやシェアプレートを提案",
+                ],
             )
 
     if return_figs:
@@ -1100,9 +1196,21 @@ def _analysis_6_stay_time_unit_price(df: pd.DataFrame, order_df: pd.DataFrame | 
                                      fig_real, grp.reset_index()))
                 else:
                     st.image(_fig_to_buf(fig_real), use_container_width=True)
-                    st.success(
-                        "✅ データには来店・退店時刻が含まれているため、"
-                        "滞在時間に基づく時間客単価を算出しています。"
+                    max_usp_idx = grp["時間客単価"].idxmax()
+                    max_usp_val = grp.loc[max_usp_idx, "時間客単価"]
+                    max_sp_idx = grp["平均客単価"].idxmax()
+                    max_sp_val = grp.loc[max_sp_idx, "平均客単価"]
+                    _insight_advice_block(
+                        [
+                            f"時間あたり売上効率（時間客単価）が最も高い滞在帯: **{max_usp_idx}**（{max_usp_val:,.0f}円/時）",
+                            f"客単価の絶対値が最も高い滞在帯: **{max_sp_idx}**（{max_sp_val:,.0f}円）— 長時間ほど伝票単価は大きい",
+                            "短時間帯は時間客単価が高く『効率型』、長時間帯は客単価が高く『高単価型』の2パターンが存在",
+                        ],
+                        [
+                            f"ピーク時は{max_usp_idx}の回転数を最大化し、時間当たり売上を向上させる",
+                            "時間制コース（例: 90分制）の価格を時間客単価に基づいて最適化する",
+                            "閑散時は長時間滞在客の追加注文を促す施策（デザート・追加ドリンク声がけ）で高単価化を図る",
+                        ],
                     )
 
                 # 人数×滞在時間の散布図（人数データがある場合）
@@ -1167,10 +1275,17 @@ def _analysis_6_stay_time_unit_price(df: pd.DataFrame, order_df: pd.DataFrame | 
         figs_out.append(("滞在時間分析 - 客単価・時間客単価（ダミー）", fig_dummy, dummy_df))
     else:
         st.image(_fig_to_buf(fig_dummy), use_container_width=True)
-        st.info(
-            "💡 ダミー例（居酒屋想定）：滞在時間が長い客ほど客単価は高いが、"
-            "時間あたりの売上効率（時間客単価）は短時間客の方が高い傾向。"
-            "飲み放題コースの時間設定や回転率向上策の検討に活用できます。"
+        _insight_advice_block(
+            [
+                "滞在時間が長いほど客単価は上昇するが、時間客単価（効率）は短時間帯が最も高い（ダミー例）",
+                "0-30分帯の時間客単価: 約5,280円/時 vs 150分超: 約2,160円/時 — 短時間の方が約2.4倍効率的",
+                "高客単価と高時間効率は二律背反 — 戦略的に使い分けることが重要",
+            ],
+            [
+                "ピーク時（混雑時間帯）は時間制コース・制限を設けて回転率を優先",
+                "90分・120分コースの価格は時間客単価に基づいて見直し、短時間の割安感を出さない設計に",
+                "閑散時は長時間滞在を歓迎し、追加注文（デザート・締め料理）で客単価を伸ばす施策を展開",
+            ],
         )
 
     if return_figs:
