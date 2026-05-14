@@ -128,13 +128,16 @@ async def get_months(dataset: str = "cafe"):
                     f"{SUPABASE_URL}/rest/v1/{visits_table}",
                     params={
                         "select": "visit_time",
-                        "visit_time": "not.is.null",
                         "limit": "1000",
                         "offset": str(offset),
                     },
                     headers=_sb_headers(),
                 )
-                resp.raise_for_status()
+                if not resp.is_success:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Supabase error {resp.status_code}: {resp.text}"
+                    )
                 rows = resp.json()
                 if not rows:
                     break
@@ -145,10 +148,13 @@ async def get_months(dataset: str = "cafe"):
         if not all_rows:
             return {"months": []}
         dates = pd.to_datetime(
-            [r["visit_time"] for r in all_rows], errors="coerce", utc=True
+            [r["visit_time"] for r in all_rows if r.get("visit_time")],
+            errors="coerce", utc=True
         ).dt.tz_convert("Asia/Tokyo")
         months = sorted({d.strftime("%Y-%m") for d in dates if pd.notna(d)})
         return {"months": months}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
