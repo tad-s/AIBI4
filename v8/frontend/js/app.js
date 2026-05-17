@@ -416,7 +416,6 @@ async function onFetchClick() {
   fetchBtn.disabled = true;
   emptyState.style.display = "none";
   loadedState.style.display = "none";
-  chatMsgs.innerHTML = "";
   chatGraphsArea.innerHTML = "";
   analysisGrid.innerHTML = "";
   kpiBar.innerHTML = "";
@@ -596,8 +595,10 @@ function appendMsg(role, html) {
   div.innerHTML = typeof html === "string"
     ? html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>")
     : html;
-  chatMsgs.appendChild(div);
-  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  if (chatMsgs) {
+    chatMsgs.appendChild(div);
+    chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  }
   return div;
 }
 
@@ -605,7 +606,6 @@ async function onClearChat() {
   if (!sessionId) return;
   try {
     await api.clearChat(sessionId);
-    chatMsgs.innerHTML = "";
     chatGraphsArea.innerHTML = `
       <div class="empty-state" style="padding:40px 0;grid-column:1/-1;">
         <div class="empty-icon" style="font-size:36px;opacity:.3;">💬</div>
