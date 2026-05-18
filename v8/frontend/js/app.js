@@ -404,6 +404,22 @@ async function init() {
   });
 }
 
+// ── セッション自動復旧（Railway再起動後のインメモリ消失に対応）──
+async function ensureSession() {
+  if (!sessionId) {
+    const { session_id } = await api.createSession();
+    sessionId = session_id;
+    return;
+  }
+  // セッションの生死確認 (404 ならば再作成)
+  const r = await fetch(`/api/sessions/${sessionId}/summary`);
+  if (r.status === 404) {
+    const { session_id } = await api.createSession();
+    sessionId = session_id;
+    showToast("セッションを再作成しました。", "info");
+  }
+}
+
 // ── データ取得 ──
 async function onFetchClick() {
   if (selectedMonths.size === 0) {
@@ -413,6 +429,14 @@ async function onFetchClick() {
 
   const months = [...selectedMonths].sort();
   const storeIds = selectedStoreIds.size > 0 ? [...selectedStoreIds] : null;
+
+  // セッション有効性確認
+  try {
+    await ensureSession();
+  } catch (e) {
+    showToast("セッション確立に失敗しました。ページをリロードしてください。", "error");
+    return;
+  }
 
   // UI リセット
   fetchBtn.disabled = true;
