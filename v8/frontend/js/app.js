@@ -45,6 +45,27 @@ const toastEl         = $("toast");
 const datasetSelect   = $("dataset-select");
 const exportBtn       = $("export-btn");
 
+// ── ライトボックス ──
+const imgModal      = $("img-modal");
+const imgModalImg   = $("img-modal-img");
+const imgModalTitle = $("img-modal-title");
+
+function openLightbox(src, title) {
+  imgModalImg.src       = src;
+  imgModalTitle.textContent = title;
+  imgModal.classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+function closeLightbox() {
+  imgModal.classList.remove("open");
+  document.body.style.overflow = "";
+  imgModalImg.src = "";
+}
+
+$("img-modal-close").addEventListener("click", closeLightbox);
+imgModal.querySelector(".img-modal-backdrop").addEventListener("click", closeLightbox);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeLightbox(); });
+
 // ── Toast ──
 let toastTimer;
 function showToast(msg, type = "info") {
@@ -209,11 +230,13 @@ function buildGraphCard(title, imageB64, insight, table, insights, advice) {
   }
   card.appendChild(header);
 
-  // グラフ画像
+  // グラフ画像（クリックで拡大）
   const img = document.createElement("img");
   img.src = `data:image/png;base64,${imageB64}`;
   img.alt = title;
   img.loading = "lazy";
+  img.title = "クリックで拡大";
+  img.addEventListener("click", () => openLightbox(img.src, title));
   card.appendChild(img);
 
   // 知見・アドバイス（2列レイアウト）または従来の insight 表示
