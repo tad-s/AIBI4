@@ -41,6 +41,16 @@ DATASET_CONFIG = {
         "stores_table": "cafe_stores",
         "visits_table": "cafe_visits",
     },
+    "bakery": {
+        "rpc_name":     "get_bakery_sales",
+        "stores_table": "bakery_stores",
+        "visits_table": "bakery_visits",
+    },
+    "salon": {
+        "rpc_name":     "get_salon_sales",
+        "stores_table": "salon_stores",
+        "visits_table": "salon_visits",
+    },
 }
 
 
