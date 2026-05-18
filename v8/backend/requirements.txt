@@ -9,3 +9,4 @@ numpy==2.2.1
 matplotlib==3.10.0
 python-dotenv==1.0.1
 httpx>=0.26,<0.28
+openpyxl>=3.1

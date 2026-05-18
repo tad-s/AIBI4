@@ -43,6 +43,7 @@ const voiceBtn        = $("voice-btn");
 const chatGraphsArea  = $("chat-graphs-area");
 const toastEl         = $("toast");
 const datasetSelect   = $("dataset-select");
+const exportBtn       = $("export-btn");
 
 // ── Toast ──
 let toastTimer;
@@ -397,6 +398,7 @@ async function init() {
   chatSendBtn.addEventListener("click", onChatSend);
   clearChatBtn.addEventListener("click", onClearChat);
   voiceBtn.addEventListener("click", onVoiceClick);
+  exportBtn.addEventListener("click", onExportExcel);
   chatInput.addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onChatSend(); }
   });
@@ -414,6 +416,8 @@ async function onFetchClick() {
 
   // UI リセット
   fetchBtn.disabled = true;
+  exportBtn.disabled = true;
+  exportBtn.textContent = "📥 Excelエクスポート";
   emptyState.style.display = "none";
   loadedState.style.display = "none";
   chatGraphsArea.innerHTML = "";
@@ -513,10 +517,39 @@ async function runBuiltinAnalysis() {
       analysisGrid.appendChild(card);
     });
 
+    exportBtn.disabled = false;
+    exportBtn.title = "分析結果をExcelにエクスポート";
     showToast("6項目の分析が完了しました。", "success");
   } catch (e) {
     analysisGrid.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--danger);">⚠️ 分析エラー: ${e.message}</div>`;
     showToast(`分析エラー: ${e.message}`, "error");
+  }
+}
+
+// ── Excel エクスポート ──
+async function onExportExcel() {
+  if (!sessionId) return;
+  exportBtn.disabled = true;
+  exportBtn.textContent = "⏳ 生成中…";
+  try {
+    const resp = await fetch(`/api/sessions/${sessionId}/export`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || resp.statusText);
+    }
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `AIBI4_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Excelファイルをダウンロードしました。", "success");
+  } catch (e) {
+    showToast(`エクスポートエラー: ${e.message}`, "error");
+  } finally {
+    exportBtn.disabled = false;
+    exportBtn.textContent = "📥 Excelエクスポート";
   }
 }
 

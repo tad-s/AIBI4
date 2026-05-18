@@ -21,4 +21,5 @@ async def run_analysis(sid: str):
         raise HTTPException(status_code=400, detail="データが取得されていません。先にデータを取得してください。")
 
     results = await run_in_threadpool(run_all_analyses, df)
+    sess.update_session(sid, analyses=results)
     return {"analyses": results}

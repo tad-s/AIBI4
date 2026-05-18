@@ -384,7 +384,7 @@ body { background: var(--bg); color: var(--text); display: flex; overflow: hidde
 .data-info-bar {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  padding: 10px 24px;
+  padding: 8px 24px;
   display: flex;
   align-items: center;
   gap: 20px;
@@ -392,6 +392,19 @@ body { background: var(--bg); color: var(--text); display: flex; overflow: hidde
   flex-wrap: wrap;
   box-shadow: 0 1px 4px rgba(0,0,0,.05);
 }
+.btn-export {
+  margin-left: auto;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1.5px solid var(--border-lite);
+  font-size: 12px;
+  padding: 6px 14px;
+  width: auto;
+  gap: 5px;
+  transition: background var(--transition), border-color var(--transition);
+}
+.btn-export:hover:not(:disabled) { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); opacity: 1; }
+.btn-export:disabled { opacity: .35; cursor: not-allowed; }
 .data-info-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sub); }
 .data-info-item strong { color: var(--text); font-weight: 600; }
 .data-info-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }

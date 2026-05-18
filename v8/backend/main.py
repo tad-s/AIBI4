@@ -39,10 +39,12 @@ def health():
 from data_router import router as data_router
 from analysis_router import router as analysis_router
 from chat_router import router as chat_router
+from export_router import router as export_router
 
 app.include_router(data_router,     prefix="/api")
 app.include_router(analysis_router, prefix="/api")
 app.include_router(chat_router,     prefix="/api")
+app.include_router(export_router,   prefix="/api")
 
 # ── フロントエンド静的ファイル配信（最後に登録）──
 frontend_path = Path(__file__).parent.parent / "frontend"
