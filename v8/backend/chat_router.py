@@ -59,6 +59,15 @@ async def chat(sid: str, req: ChatRequest):
         result = await run_in_threadpool(exec_graph_code, code, df)
         graphs.append(result)
 
+    # チャット結果をセッションに蓄積（Excel エクスポート用）
+    chat_analyses = list(s.get("chat_analyses") or [])
+    chat_analyses.append({
+        "question": req.message,
+        "text":     text_part,
+        "graphs":   [g for g in graphs if g.get("image_b64")],
+    })
+    sess.update_session(sid, chat_analyses=chat_analyses)
+
     return {
         "text": text_part,
         "graphs": graphs,
@@ -85,5 +94,5 @@ def clear_chat(sid: str):
     s = sess.get_session(sid)
     if not s:
         raise HTTPException(status_code=404, detail="セッションが見つかりません。")
-    sess.update_session(sid, chat_history=[])
+    sess.update_session(sid, chat_history=[], chat_analyses=[])
     return {"ok": True}

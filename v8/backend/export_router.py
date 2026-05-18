@@ -30,7 +30,7 @@ _IMG_H  = 420
 _IMG_ROWS = 28
 
 
-def _build_excel(analyses: list[dict], df, summary_text: str) -> io.BytesIO:
+def _build_excel(analyses: list[dict], chat_analyses: list[dict], df, summary_text: str) -> io.BytesIO:
     import openpyxl
     import openpyxl.utils
     from openpyxl.drawing.image import Image as XLImage
@@ -153,6 +153,51 @@ def _build_excel(analyses: list[dict], df, summary_text: str) -> io.BytesIO:
             ws.cell(row=tbl_start, column=1, value="【集計データ】").font = Font(bold=True, size=11)
             write_table(ws, table, tbl_start + 1)
 
+    # ─── チャット分析シート ───
+    if chat_analyses:
+        ws_c = wb.create_sheet("チャット分析")
+        ws_c.column_dimensions["A"].width = 90
+
+        ws_c["A1"].value = "チャット分析レポート"
+        ws_c["A1"].font  = Font(bold=True, size=14, color=_BLUE)
+        ws_c.row_dimensions[1].height = 24
+
+        cur = 3
+        for idx, entry in enumerate(chat_analyses, 1):
+            # 質問行
+            q = ws_c.cell(row=cur, column=1, value=f"Q{idx}：{entry.get('question', '')}")
+            q.font      = Font(bold=True, size=11, color="FFFFFF")
+            q.fill      = bg_fill(_BLUE)
+            q.alignment = Alignment(wrap_text=True, vertical="center")
+            ws_c.row_dimensions[cur].height = 28
+            cur += 1
+
+            # 回答テキスト
+            text = entry.get("text", "").strip()
+            if text:
+                a = ws_c.cell(row=cur, column=1, value=text)
+                a.alignment = Alignment(wrap_text=True, vertical="top")
+                a.fill      = bg_fill("F4F6FB")
+                # 文字数に応じて行高さを調整（上限 200px）
+                ws_c.row_dimensions[cur].height = min(max(30, len(text) // 4), 200)
+                cur += 1
+
+            # グラフ画像（複数可）
+            for g in entry.get("graphs", []):
+                img_b64 = g.get("image_b64")
+                if not img_b64:
+                    continue
+                try:
+                    xl_img = XLImage(io.BytesIO(base64.b64decode(img_b64)))
+                    xl_img.width  = _IMG_W
+                    xl_img.height = _IMG_H
+                    ws_c.add_image(xl_img, f"A{cur}")
+                    cur += _IMG_ROWS + 1
+                except Exception:
+                    pass
+
+            cur += 2  # エントリー間の余白
+
     out = io.BytesIO()
     wb.save(out)
     out.seek(0)
@@ -173,11 +218,12 @@ def export_excel(sid: str):
     if not analyses:
         raise HTTPException(status_code=400, detail="分析結果がありません。先に分析を実行してください。")
 
-    df           = s.get("df")
-    summary_text = s.get("summary_text", "")
+    df             = s.get("df")
+    summary_text   = s.get("summary_text", "")
+    chat_analyses  = s.get("chat_analyses") or []
 
     try:
-        buf = _build_excel(analyses, df, summary_text)
+        buf = _build_excel(analyses, chat_analyses, df, summary_text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Excel生成エラー: {e}")
 
