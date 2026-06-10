@@ -79,7 +79,7 @@ BEGIN
     ),
     deduped AS (
         -- Step2: 小集合に対して JOIN → DISTINCT ON（処理行数を劇的に削減）
-        SELECT DISTINCT ON (fv.visit_id, oi.item_name_raw, oi.quantity, oi.unit_price)
+        SELECT DISTINCT ON (fv.visit_id, oi.item_name, oi.quantity, oi.unit_price)
             fv.receipt_no,
             o.order_time,
             fv.visit_time,
@@ -88,7 +88,7 @@ BEGIN
             fv.customer_layer,
             s.store_name,
             s.shop_code,
-            oi.item_name_raw,
+            oi.item_name            AS item_name_raw,
             oi.quantity::INTEGER        AS quantity,
             oi.unit_price,
             dw.temperature_2m_max,
@@ -105,7 +105,7 @@ BEGIN
                ON  dw.location_id = s.location_id
                AND dw.date = (fv.visit_time AT TIME ZONE 'Asia/Tokyo')::DATE
         WHERE oi.line_type = 'M'
-        ORDER BY fv.visit_id, oi.item_name_raw, oi.quantity, oi.unit_price, o.order_time
+        ORDER BY fv.visit_id, oi.item_name, oi.quantity, oi.unit_price, o.order_time
     )
     SELECT
         d.receipt_no,
@@ -135,6 +135,42 @@ $$;
 -- ────────────────────────────────────────────
 GRANT EXECUTE ON FUNCTION get_izakaya_sales(TEXT, TEXT, INTEGER[]) TO anon;
 GRANT EXECUTE ON FUNCTION get_izakaya_sales(TEXT, TEXT, INTEGER[]) TO authenticated;
+
+-- ────────────────────────────────────────────
+-- Step 5: 月一覧取得 RPC（全データセット共通）
+-- DISTINCT + SECURITY DEFINER で1クエリ完結。
+-- ページネーションループ不要で大量データでも高速。
+-- ────────────────────────────────────────────
+DROP FUNCTION IF EXISTS get_available_months(TEXT);
+
+CREATE OR REPLACE FUNCTION get_available_months(p_dataset TEXT DEFAULT 'izakaya')
+RETURNS TABLE(year_month TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_table TEXT;
+BEGIN
+    v_table := CASE p_dataset
+        WHEN 'izakaya' THEN 'visits'
+        WHEN 'cafe'    THEN 'cafe_visits'
+        WHEN 'bakery'  THEN 'bakery_visits'
+        WHEN 'salon'   THEN 'salon_visits'
+        ELSE 'visits'
+    END;
+    RETURN QUERY EXECUTE format(
+        $q$SELECT DISTINCT
+               to_char(visit_time AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM')::TEXT
+           FROM %I
+           WHERE visit_time IS NOT NULL
+           ORDER BY 1$q$,
+        v_table
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_available_months(TEXT) TO anon;
+GRANT EXECUTE ON FUNCTION get_available_months(TEXT) TO authenticated;
 
 -- ────────────────────────────────────────────
 -- Step 5: 動作確認クエリ（必要に応じて実行）

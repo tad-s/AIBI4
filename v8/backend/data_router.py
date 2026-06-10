@@ -126,42 +126,21 @@ async def _fetch_chunk_async(
 
 
 @router.get("/months")
-async def get_months(dataset: str = "cafe"):
-    cfg = DATASET_CONFIG.get(dataset, DATASET_CONFIG["izakaya"])
-    visits_table = cfg["visits_table"]
+async def get_months(dataset: str = "izakaya"):
     try:
-        all_rows: list[dict] = []
-        offset = 0
         async with httpx.AsyncClient(timeout=30.0) as client:
-            while True:
-                resp = await client.get(
-                    f"{SUPABASE_URL}/rest/v1/{visits_table}",
-                    params={
-                        "select": "visit_time",
-                        "limit": "1000",
-                        "offset": str(offset),
-                    },
-                    headers=_sb_headers(),
+            resp = await client.post(
+                f"{SUPABASE_URL}/rest/v1/rpc/get_available_months",
+                json={"p_dataset": dataset},
+                headers=_sb_headers(),
+            )
+            if not resp.is_success:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Supabase error {resp.status_code}: {resp.text}"
                 )
-                if not resp.is_success:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Supabase error {resp.status_code}: {resp.text}"
-                    )
-                rows = resp.json()
-                if not rows:
-                    break
-                all_rows.extend(rows)
-                if len(rows) < 1000:
-                    break
-                offset += 1000
-        if not all_rows:
-            return {"months": []}
-        dates = pd.to_datetime(
-            [r["visit_time"] for r in all_rows if r.get("visit_time")],
-            errors="coerce", utc=True
-        ).tz_convert("Asia/Tokyo")
-        months = sorted({d.strftime("%Y-%m") for d in dates if pd.notna(d)})
+        data = resp.json()
+        months = sorted([row["year_month"] for row in data]) if isinstance(data, list) else []
         return {"months": months}
     except HTTPException:
         raise

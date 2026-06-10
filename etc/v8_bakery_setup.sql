@@ -38,12 +38,15 @@ CREATE INDEX IF NOT EXISTS idx_bakery_items_visit_id    ON bakery_order_items(vi
 
 -- ── Step 3: 店舗マスター ──────────────────────────────────
 INSERT INTO bakery_stores (store_name, shop_code, address, latitude, longitude) VALUES
-    ('渋谷店',    'BK001', '東京都渋谷区道玄坂1-2-3',       35.6580, 139.7016),
-    ('新宿店',    'BK002', '東京都新宿区新宿3-14-1',         35.6896, 139.7006),
-    ('銀座店',    'BK003', '東京都中央区銀座4-6-1',          35.6717, 139.7649),
-    ('吉祥寺店',  'BK004', '東京都武蔵野市吉祥寺本町1-5-2',  35.7026, 139.5796),
-    ('自由が丘店','BK005', '東京都目黒区自由が丘1-15-8',     35.6077, 139.6686)
+    ('Farine 渋谷店',    'BK001', '東京都渋谷区道玄坂1-2-3',       35.6580, 139.7016),
+    ('Farine 新宿店',    'BK002', '東京都新宿区新宿3-14-1',         35.6896, 139.7006),
+    ('Farine 銀座店',    'BK003', '東京都中央区銀座4-6-1',          35.6717, 139.7649),
+    ('Farine 吉祥寺店',  'BK004', '東京都武蔵野市吉祥寺本町1-5-2',  35.7026, 139.5796),
+    ('Farine 自由が丘店','BK005', '東京都目黒区自由が丘1-15-8',     35.6077, 139.6686)
 ON CONFLICT DO NOTHING;
+
+-- 既存データのブランド名更新（初回実行後に店舗名が変わった場合）
+UPDATE bakery_stores SET store_name = 'Farine ' || store_name WHERE store_name NOT LIKE 'Farine%';
 
 -- ── Step 4: RPC 関数（get_izakaya_sales と同一インターフェース）────
 DROP FUNCTION IF EXISTS get_bakery_sales(TEXT, TEXT, INTEGER[]);

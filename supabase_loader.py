@@ -129,35 +129,22 @@ def fetch_visits_for_summary(client: Client) -> pd.DataFrame:
     return df[["store_name", "receipt_no", "visit_time"]]
 
 
+_VISITS_TABLE_TO_DATASET = {
+    "visits":        "izakaya",
+    "cafe_visits":   "cafe",
+    "bakery_visits": "bakery",
+    "salon_visits":  "salon",
+}
+
 def fetch_available_months(client: Client, visits_table: str = "visits") -> list[str]:
     """
-    visits テーブルから来店データが存在する月（YYYY-MM 形式）の一覧を返す。
-    全件ページネーション取得で件数上限の影響を受けない。
-    RLS が有効でデータが読めない場合は空リストを返す。
+    get_available_months RPC（SECURITY DEFINER）で月一覧を1クエリ取得。
+    全件ページネーション不要・大量データでも高速。
     """
+    dataset = _VISITS_TABLE_TO_DATASET.get(visits_table, "izakaya")
     try:
-        PAGE = 1000
-        all_rows: list[dict] = []
-        offset = 0
-        while True:
-            result = (
-                client.table(visits_table)
-                .select("visit_time")
-                .not_.is_("visit_time", "null")
-                .range(offset, offset + PAGE - 1)
-                .execute()
-            )
-            rows = result.data or []
-            all_rows.extend(rows)
-            if len(rows) < PAGE:
-                break
-            offset += PAGE
-        if not all_rows:
-            return []
-        dates = pd.to_datetime(
-            [r["visit_time"] for r in all_rows], errors="coerce", utc=True
-        ).dt.tz_convert("Asia/Tokyo")
-        return sorted({d.strftime("%Y-%m") for d in dates if pd.notna(d)})
+        result = client.rpc("get_available_months", {"p_dataset": dataset}).execute()
+        return [row["year_month"] for row in (result.data or [])]
     except Exception:
         return []
 

@@ -43,12 +43,15 @@ CREATE INDEX IF NOT EXISTS idx_salon_items_visit_id    ON salon_order_items(visi
 
 -- ── Step 3: 店舗マスター ──────────────────────────────────
 INSERT INTO salon_stores (store_name, shop_code, address, latitude, longitude) VALUES
-    ('表参道本店',  'SL001', '東京都渋谷区神宮前5-1-1',    35.6652, 139.7121),
-    ('渋谷店',     'SL002', '東京都渋谷区宇田川町21-1',    35.6617, 139.6994),
-    ('銀座店',     'SL003', '東京都中央区銀座5-9-1',       35.6720, 139.7641),
-    ('新宿西口店',  'SL004', '東京都新宿区西新宿1-1-3',    35.6908, 139.6990),
-    ('自由が丘店',  'SL005', '東京都目黒区自由が丘2-9-1',  35.6079, 139.6679)
+    ('Lumière 表参道本店',  'SL001', '東京都渋谷区神宮前5-1-1',    35.6652, 139.7121),
+    ('Lumière 渋谷店',     'SL002', '東京都渋谷区宇田川町21-1',    35.6617, 139.6994),
+    ('Lumière 銀座店',     'SL003', '東京都中央区銀座5-9-1',       35.6720, 139.7641),
+    ('Lumière 新宿西口店',  'SL004', '東京都新宿区西新宿1-1-3',    35.6908, 139.6990),
+    ('Lumière 自由が丘店',  'SL005', '東京都目黒区自由が丘2-9-1',  35.6079, 139.6679)
 ON CONFLICT DO NOTHING;
+
+-- 既存データのブランド名更新（初回実行後に店舗名が変わった場合）
+UPDATE salon_stores SET store_name = 'Lumière ' || store_name WHERE store_name NOT LIKE 'Lumière%';
 
 -- ── Step 4: RPC 関数 ─────────────────────────────────────
 DROP FUNCTION IF EXISTS get_salon_sales(TEXT, TEXT, INTEGER[]);

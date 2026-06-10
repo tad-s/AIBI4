@@ -398,33 +398,58 @@ def analysis_3_abc_analysis(order_df: pd.DataFrame | None) -> list[dict]:
                 "table": gs.reset_index().to_dict("records"),
             })
 
-            exclude = ["レジ袋","袋","クーポン","割引","引","0円"]
-            fig2, axes = plt.subplots(1, 3, figsize=(9, 3.5))
-            for idx, (grp, clr) in enumerate([("高（A）","#c0392b"),("中（B）","#e67e22"),("低（C）","#27ae60")]):
-                sub = odf[odf["客単価グループ"] == grp]
-                items = [it for lst in sub["商品リスト"] for it in lst
-                         if it and not any(ex in it for ex in exclude)]
-                top5 = [it for it, _ in Counter(items).most_common(5)]
-                cnts = [Counter(items)[it] for it in top5]
-                axes[idx].barh(top5[::-1], cnts[::-1], color=clr, edgecolor="white")
-                axes[idx].set_title(grp, fontsize=9)
-                axes[idx].tick_params(axis="y", labelsize=7)
-            plt.suptitle("グループ別 売上貢献商品 Top5", fontsize=10)
-            plt.tight_layout()
-            results.append({
-                "title": "分析③ ABC分析 - グループ別 売上貢献商品",
-                "image_b64": _fig_to_b64(fig2),
-                "insight": "各客単価グループで最も注文されている商品を比較しています。",
-                "insights": [
-                    "高（A）・中（B）・低（C）グループそれぞれで売上貢献トップ商品が異なる",
-                    "グループ別の人気商品は、各層向けおすすめメニューの設計に直結する",
-                ],
-                "advice": [
-                    "Aグループの人気商品はプレミアム感を演出するメニュー表示・提供方法を強化",
-                    "Cグループに人気の商品を起点に、隣接するUP商品への誘導を設計する",
-                ],
-                "table": None,
-            })
+            # ─── 客層別 来客数・客単価分析 ───
+            if "客層" in odf.columns and odf["客層"].notna().sum() >= 10:
+                layer_grp = odf.groupby("客層").agg(
+                    件数=("客単価","count"),
+                    平均客単価=("客単価","mean"),
+                ).sort_values("平均客単価", ascending=False)
+
+                if len(layer_grp) >= 2:
+                    fig2, ax_l1 = plt.subplots(figsize=(8, 4))
+                    ax_l2 = ax_l1.twinx()
+                    layer_colors = {"VIP":"#c0392b","会員":"#e67e22","リピーター":"#27ae60","新規":"#5b9bd5"}
+                    bar_colors = [layer_colors.get(l, "#95a5a6") for l in layer_grp.index]
+                    bars = ax_l1.bar(layer_grp.index, layer_grp["件数"],
+                                     color=bar_colors, alpha=0.75, label="来客数")
+                    ax_l2.plot(layer_grp.index, layer_grp["平均客単価"],
+                               marker="o", color="#2c3e50", linewidth=2.5, label="平均客単価", zorder=5)
+                    for bar in bars:
+                        h = bar.get_height()
+                        ax_l1.text(bar.get_x() + bar.get_width()/2,
+                                   h + layer_grp["件数"].max()*0.01,
+                                   f"{int(h)}件", ha="center", va="bottom", fontsize=8)
+                    for xi, (lbl, row) in enumerate(layer_grp.iterrows()):
+                        ax_l2.text(xi, row["平均客単価"] + layer_grp["平均客単価"].max()*0.02,
+                                   f"{row['平均客単価']:,.0f}円", ha="center", va="bottom", fontsize=8)
+                    ax_l1.set_ylabel("来客数（件）")
+                    ax_l2.set_ylabel("平均客単価（円）")
+                    ax_l1.set_title("客層別 来客数 × 平均客単価")
+                    h1, lb1 = ax_l1.get_legend_handles_labels()
+                    h2, lb2 = ax_l2.get_legend_handles_labels()
+                    ax_l1.legend(h1+h2, lb1+lb2, loc="upper right", fontsize=8)
+                    plt.tight_layout()
+
+                    top_layer    = layer_grp.index[0]
+                    bottom_layer = layer_grp.index[-1]
+                    top_cnt_layer = layer_grp["件数"].idxmax()
+                    results.append({
+                        "title": "分析③ 客層別 来客数 × 平均客単価",
+                        "image_b64": _fig_to_b64(fig2),
+                        "insight": (f"平均客単価 最高: **{top_layer}**（{layer_grp.loc[top_layer,'平均客単価']:,.0f}円）"
+                                    f" / 来客数 最多: **{top_cnt_layer}**"),
+                        "insights": [
+                            f"平均客単価 最高の客層: **{top_layer}**（{layer_grp.loc[top_layer,'平均客単価']:,.0f}円）",
+                            f"来客数 最多の客層: **{top_cnt_layer}**（{int(layer_grp.loc[top_cnt_layer,'件数'])}件）",
+                            f"平均客単価 最低の客層: **{bottom_layer}**（{layer_grp.loc[bottom_layer,'平均客単価']:,.0f}円）— リピーター転換・単価向上の優先対象",
+                        ],
+                        "advice": [
+                            f"**{bottom_layer}** 層へのリピーター育成施策（スタンプカード・次回来店クーポン）で来店頻度と客単価を引き上げる",
+                            f"**{top_layer}** 層向けに高付加価値メニュー・優待プログラムを設計し、離脱を防いで売上の柱を守る",
+                            "客層ごとに推奨トークを標準化し、全スタッフが同じアップセル策を実行できる体制を整える",
+                        ],
+                        "table": layer_grp.reset_index().to_dict("records"),
+                    })
             use_dummy = False
         except Exception:
             pass
@@ -618,100 +643,148 @@ def analysis_4_basket(order_df: pd.DataFrame | None) -> list[dict]:
     return results
 
 
-# ── 分析⑤ ヘビー vs ライト ──
-def analysis_5_heavy_light(order_df: pd.DataFrame | None) -> list[dict]:
+# ── 分析⑤ 曜日×時間帯 売上ヒートマップ ──
+def analysis_5_dayhour_heatmap(order_df: pd.DataFrame | None) -> list[dict]:
     results = []
     use_dummy = True
+    _DAY_LABELS = {0:"月", 1:"火", 2:"水", 3:"木", 4:"金", 5:"土", 6:"日"}
 
-    if (order_df is not None and "ヘビー数" in order_df.columns
-            and "ライト数" in order_df.columns and len(order_df) >= 20):
+    if (order_df is not None and "曜日" in order_df.columns
+            and "時間帯" in order_df.columns and len(order_df) >= 30):
         try:
             odf = order_df.copy()
-            def classify(row):
-                h, l = row.get("ヘビー数", 0), row.get("ライト数", 0)
-                if h == 0 and l == 0:
-                    return "その他"
-                if h > l:
-                    return "ヘビー系"
-                if l > h:
-                    return "ライト系"
-                return "ミックス"
-            odf["食品タイプ"] = odf.apply(classify, axis=1)
-            grp = (
-                odf.groupby("食品タイプ")["客単価"]
-                .agg(["mean","median","count"])
-                .rename(columns={"mean":"平均客単価","median":"中央値","count":"件数"})
-                .loc[lambda d: d["件数"] >= 5]
+
+            # ─── Chart 1: 来客数ヒートマップ（曜日×時間帯）───
+            pivot_cnt = (
+                odf.groupby(["曜日","時間帯"]).size()
+                .unstack(fill_value=0)
             )
-            if len(grp) >= 2:
-                clr_map = {"ヘビー系":"#e74c3c","ライト系":"#27ae60","ミックス":"#e67e22","その他":"#95a5a6"}
-                fig, ax = plt.subplots(figsize=(6, 4))
-                ax.bar(grp.index, grp["平均客単価"],
-                       color=[clr_map.get(g,"#999") for g in grp.index], edgecolor="white")
-                ax.set_ylabel("平均客単価（円）")
-                ax.set_title("食品タイプ別 平均客単価")
+
+            if pivot_cnt.shape[1] >= 3:
+                fig1, ax1 = plt.subplots(figsize=(11, 3.5))
+                im = ax1.imshow(pivot_cnt.values, cmap="YlOrRd", aspect="auto")
+                ax1.set_yticks(range(len(pivot_cnt.index)))
+                ax1.set_yticklabels([_DAY_LABELS.get(i, str(i)) for i in pivot_cnt.index], fontsize=9)
+                ax1.set_xticks(range(len(pivot_cnt.columns)))
+                ax1.set_xticklabels([f"{h}時" for h in pivot_cnt.columns],
+                                     rotation=45, ha="right", fontsize=8)
+                plt.colorbar(im, ax=ax1, label="来客数", shrink=0.8)
+                ax1.set_title("曜日 × 時間帯別 来客数ヒートマップ")
                 plt.tight_layout()
-                insight = ""
-                insights5, advice5 = [], []
-                if "ヘビー系" in grp.index and "ライト系" in grp.index:
-                    h_avg = grp.loc["ヘビー系","平均客単価"]
-                    l_avg = grp.loc["ライト系","平均客単価"]
-                    h_cnt = int(grp.loc["ヘビー系","件数"])
-                    l_cnt = int(grp.loc["ライト系","件数"])
-                    if h_avg > l_avg:
-                        diff = h_avg - l_avg
-                        insight = f"ヘビー系客の平均客単価（{h_avg:,.0f}円）はライト系（{l_avg:,.0f}円）より高い傾向。"
-                        insights5 = [
-                            f"ヘビー系客の平均客単価（{h_avg:,.0f}円 / {h_cnt}件）はライト系（{l_avg:,.0f}円 / {l_cnt}件）より **{diff:,.0f}円高い**",
-                            "揚げ物・大きいサイズを選ぶ客ほど全体的に注文量が多い傾向",
-                        ]
-                        advice5 = [
-                            "ヘビー系商品を注文した客に追加ドリンクや締めメニューを積極的に提案",
-                            "大盛り・サイズアップオプションを設けてアップセルを促進",
-                        ]
-                    else:
-                        diff = l_avg - h_avg
-                        insight = f"ライト系客の平均客単価（{l_avg:,.0f}円）はヘビー系（{h_avg:,.0f}円）より高い傾向。"
-                        insights5 = [
-                            f"ライト系客の平均客単価（{l_avg:,.0f}円 / {l_cnt}件）はヘビー系（{h_avg:,.0f}円 / {h_cnt}件）より **{diff:,.0f}円高い**",
-                            "ライト系客は1品あたりの量より品数を多く注文する傾向",
-                        ]
-                        advice5 = [
-                            "ライト系メニューのバリエーションを増やし、多品注文を誘発する",
-                            "小皿・シェアメニューをグループ向けにセット提案し、品数増加を促す",
-                        ]
+
+                flat = pivot_cnt.values
+                peak_r, peak_c = np.unravel_index(flat.argmax(), flat.shape)
+                peak_day_lbl  = _DAY_LABELS.get(pivot_cnt.index[peak_r], "?")
+                peak_hour     = pivot_cnt.columns[peak_c]
+                day_total     = pivot_cnt.sum(axis=1)
+                best_day      = _DAY_LABELS.get(int(day_total.idxmax()), "?")
+                worst_day     = _DAY_LABELS.get(int(day_total.idxmin()), "?")
+                hour_total    = pivot_cnt.sum(axis=0)
+                low_hours     = [str(h) for h in hour_total.nsmallest(2).index.tolist()]
+
                 results.append({
-                    "title": "分析⑤ 食品タイプ別 平均客単価",
-                    "image_b64": _fig_to_b64(fig),
-                    "insight": insight,
-                    "insights": insights5,
-                    "advice": advice5,
-                    "table": grp.reset_index().to_dict("records"),
+                    "title": "分析⑤ 曜日×時間帯 来客数ヒートマップ",
+                    "image_b64": _fig_to_b64(fig1),
+                    "insight": f"最繁忙帯: **{peak_day_lbl}曜日 {peak_hour}時台**",
+                    "insights": [
+                        f"最繁忙帯: **{peak_day_lbl}曜日 {peak_hour}時台** — ここに人員・仕込みを集中する",
+                        f"来客数 最多の曜日: **{best_day}曜日** / 最少の曜日: **{worst_day}曜日**",
+                        f"閑散時間帯（{', '.join([h+'時台' for h in low_hours])}）はタイムセール・SNS集客の好機",
+                    ],
+                    "advice": [
+                        f"繁忙帯（{peak_day_lbl}曜日 {peak_hour}時前後）にシフトを集中し、提供スピードと客席回転率を最大化",
+                        f"閑散帯（{', '.join([h+'時台' for h in low_hours])}）限定の割引・セット販売で来客を誘引する",
+                        f"{worst_day}曜日は特別イベント・SNSキャンペーンを集中投下して底上げを狙う",
+                    ],
+                    "table": None,
                 })
-                use_dummy = False
+
+            # ─── Chart 2: 曜日別 来客数 × 平均客単価（棒＋折れ線）───
+            day_grp = (
+                odf.groupby("曜日").agg(
+                    来客数=("客単価","count"),
+                    平均客単価=("客単価","mean"),
+                )
+                .reindex(range(7), fill_value=0)
+            )
+            day_grp.index = [_DAY_LABELS.get(i, str(i)) for i in day_grp.index]
+            day_grp = day_grp[day_grp["来客数"] > 0]
+
+            if len(day_grp) >= 2:
+                fig2, ax_d1 = plt.subplots(figsize=(8, 4))
+                ax_d2 = ax_d1.twinx()
+                ax_d1.bar(day_grp.index, day_grp["来客数"],
+                          color="#5b9bd5", alpha=0.75, label="来客数")
+                ax_d2.plot(day_grp.index, day_grp["平均客単価"],
+                           marker="o", color="#e74c3c", linewidth=2.5, label="平均客単価", zorder=5)
+                ax_d1.set_ylabel("来客数（件）", color="#5b9bd5")
+                ax_d2.set_ylabel("平均客単価（円）", color="#e74c3c")
+                ax_d1.set_title("曜日別 来客数 × 平均客単価")
+                h1, lb1 = ax_d1.get_legend_handles_labels()
+                h2, lb2 = ax_d2.get_legend_handles_labels()
+                ax_d1.legend(h1+h2, lb1+lb2, loc="upper left", fontsize=8)
+                plt.tight_layout()
+
+                high_sp_day  = day_grp["平均客単価"].idxmax()
+                low_sp_day   = day_grp["平均客単価"].idxmin()
+                high_cnt_day = day_grp["来客数"].idxmax()
+                results.append({
+                    "title": "分析⑤ 曜日別 来客数 × 平均客単価",
+                    "image_b64": _fig_to_b64(fig2),
+                    "insight": (f"客単価 最高: **{high_sp_day}曜日**（{day_grp.loc[high_sp_day,'平均客単価']:,.0f}円）"
+                                f" / 来客数 最多: **{high_cnt_day}曜日**"),
+                    "insights": [
+                        f"平均客単価 最高の曜日: **{high_sp_day}曜日**（{day_grp.loc[high_sp_day,'平均客単価']:,.0f}円）",
+                        f"来客数 最多の曜日: **{high_cnt_day}曜日**（{int(day_grp.loc[high_cnt_day,'来客数'])}件）",
+                        f"平均客単価 最低の曜日: **{low_sp_day}曜日** — 単価引き上げ施策の優先ターゲット",
+                    ],
+                    "advice": [
+                        f"高客単価の**{high_sp_day}曜日**には限定メニュー・特別コースを優先展開し、さらに単価を伸ばす",
+                        f"低客単価の**{low_sp_day}曜日**はドリンク追加促進・卓上POPでの追加注文声がけを強化する",
+                        f"来客数の多い**{high_cnt_day}曜日**に合わせてSNS投稿・キャンペーン告知タイミングを最適化する",
+                    ],
+                    "table": day_grp.reset_index().rename(columns={"index":"曜日"}).to_dict("records"),
+                })
+
+            use_dummy = False
         except Exception:
             pass
 
     if use_dummy:
-        types_d = ["ヘビー系","ライト系","ミックス","その他"]
-        avg_d   = [3800, 2900, 3200, 2500]
-        colors_d = ["#e74c3c","#27ae60","#e67e22","#95a5a6"]
-        fig_d, ax_d = plt.subplots(figsize=(6, 4))
-        ax_d.bar(types_d, avg_d, color=colors_d, edgecolor="white")
-        ax_d.set_ylabel("平均客単価（円）")
-        ax_d.set_title("食品タイプ別 平均客単価 ※ダミーデータ")
+        hours_d = list(range(10, 22))
+        day_labels_d = ["月","火","水","木","金","土","日"]
+        np.random.seed(42)
+        dummy_mat = np.array([
+            [2,3,5,4,3,2,1,2,3,2,1,1],
+            [1,2,4,4,3,2,1,1,2,1,1,0],
+            [2,3,5,5,4,3,1,2,3,2,1,1],
+            [2,3,6,5,4,3,2,3,4,3,2,1],
+            [3,4,7,6,5,4,3,5,6,4,3,2],
+            [5,7,9,8,7,6,5,7,8,6,4,3],
+            [6,8,10,9,8,7,5,6,7,5,3,2],
+        ], dtype=float)
+        fig_d, ax_d = plt.subplots(figsize=(11, 3.5))
+        im_d = ax_d.imshow(dummy_mat, cmap="YlOrRd", aspect="auto")
+        ax_d.set_yticks(range(7))
+        ax_d.set_yticklabels(day_labels_d)
+        ax_d.set_xticks(range(len(hours_d)))
+        ax_d.set_xticklabels([f"{h}時" for h in hours_d], rotation=45, ha="right")
+        plt.colorbar(im_d, ax=ax_d, label="来客数", shrink=0.8)
+        ax_d.set_title("曜日 × 時間帯別 来客数ヒートマップ ※ダミーデータ")
         plt.tight_layout()
         results.append({
-            "title": "分析⑤ 食品タイプ別 平均客単価 ※ダミーデータ",
+            "title": "分析⑤ 曜日×時間帯 来客数ヒートマップ ※ダミーデータ",
             "image_b64": _fig_to_b64(fig_d),
-            "insight": "ダミー例：ヘビー系（揚げ物・大サイズ）を注文する客は客単価が最も高い傾向。",
+            "insight": "ダミー例：日曜12時台が最繁忙。土・日・金は終日高水準。",
             "insights": [
-                "ヘビー系（揚げ物・大サイズ）客の客単価が最も高い傾向（ダミー例）",
-                "ライト系客も品数が多く、一定の客単価を維持している",
+                "最繁忙帯: 日曜12時台（ダミー例）— 集中的な人員配置が必要",
+                "土・日は終日高い来客数を維持 — 平日との大きな格差あり",
+                "火・水の閑散時間帯はタイムセール・SNS集客の好機",
             ],
             "advice": [
-                "大きいサイズへのアップグレード誘導で客単価向上が見込める",
-                "ライト系客には多品注文を促す小皿セットやシェアプレートを提案",
+                "土・日の繁忙帯にシフトを集中し、提供スピードと回転率を最大化",
+                "平日閑散帯に限定割引・セット販売でランチ・おやつ需要を喚起",
+                "金曜夜は週末モードの来客が多い — 高価格帯メニューの推奨強化が有効",
             ],
             "table": None,
         })
@@ -828,7 +901,7 @@ def run_all_analyses(df: pd.DataFrame) -> list[dict]:
         analysis_2_product_regression,
         analysis_3_abc_analysis,
         analysis_4_basket,
-        analysis_5_heavy_light,
+        analysis_5_dayhour_heatmap,
         analysis_6_stay_time,
     ]:
         try:
