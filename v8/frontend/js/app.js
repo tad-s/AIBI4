@@ -603,9 +603,13 @@ async function onExportExcel() {
 // ── チャット ──
 async function onChatSend() {
   const message = chatInput.value.trim();
-  if (!message || !sessionId) return;
+  if (!message) return;
   if (chatInput.disabled) {
     showToast("先にデータを取得してください。", "warn");
+    return;
+  }
+  if (!sessionId) {
+    showToast("セッションが切れています。ページを再読み込みしてください。", "warn");
     return;
   }
 
@@ -619,7 +623,19 @@ async function onChatSend() {
   document.querySelector(".tab[data-tab='chat']")?.click();
 
   try {
-    const result = await api.chat(sessionId, message);
+    let result;
+    try {
+      result = await api.chat(sessionId, message);
+    } catch (e) {
+      // セッション切れ（Railway再起動）の場合はデータ再取得を促す
+      if (e.message?.includes("セッションが見つかりません") || e.message?.includes("404")) {
+        loadingMsg.innerHTML = "❌ セッションが切れています。データを再取得してください。";
+        showToast("セッション切れ: データを再取得してください。", "warn");
+        chatSendBtn.disabled = false;
+        return;
+      }
+      throw e;
+    }
     loadingMsg.remove();
 
     // チャットグラフエリアの empty state を消す

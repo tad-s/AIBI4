@@ -93,13 +93,32 @@ export async function runAnalysis(sid) {
 }
 
 export async function chat(sid, message) {
-  const r = await fetch(`${BASE}/api/chat/${sid}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
-  });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120000); // 2分タイムアウト
+  try {
+    const r = await fetch(`${BASE}/api/chat/${sid}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) {
+      const body = await r.text();
+      // JSONエラーレスポンスからdetailを取り出して表示
+      try {
+        const j = JSON.parse(body);
+        throw new Error(j.detail || body);
+      } catch (_) {
+        throw new Error(body);
+      }
+    }
+    return r.json();
+  } catch (e) {
+    clearTimeout(timer);
+    if (e.name === "AbortError") throw new Error("応答タイムアウト（2分）。より短い質問を試してください。");
+    throw e;
+  }
 }
 
 export async function clearChat(sid) {
