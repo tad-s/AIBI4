@@ -107,6 +107,16 @@ def build_order_df(df: pd.DataFrame) -> pd.DataFrame | None:
         d["_is_heavy"] = d["商品名"].apply(lambda x: _kw_match(x, _HEAVY_KW)).astype(int)
         d["_is_light"] = d["商品名"].apply(lambda x: _kw_match(x, _LIGHT_KW)).astype(int)
 
+    # receipt_no は同一店舗・同一日でも複数来店で重複するため来店時間との複合キーを使用
+    if key_col == "伝票番号" and "来店時間" in d.columns:
+        d["_basket_key"] = (
+            d["来店時間"].dt.strftime("%Y%m%d%H%M%S").fillna("?")
+            + "_" + d[key_col].astype(str)
+        )
+        groupby_col = "_basket_key"
+    else:
+        groupby_col = key_col
+
     agg: dict = {"客単価": (amount_col, "first")}
     for col, agg_key in [
         ("来店時間", ("来店時間", "first")),
@@ -127,8 +137,8 @@ def build_order_df(df: pd.DataFrame) -> pd.DataFrame | None:
         agg["ヘビー数"]   = ("_is_heavy", "sum")
         agg["ライト数"]   = ("_is_light", "sum")
 
-    odf = d.groupby(key_col).agg(**agg).reset_index()
-    odf.rename(columns={key_col: "注文ID"}, inplace=True)
+    odf = d.groupby(groupby_col).agg(**agg).reset_index()
+    odf.rename(columns={groupby_col: "注文ID"}, inplace=True)
     odf["客単価"] = pd.to_numeric(odf["客単価"], errors="coerce")
     odf = odf[odf["客単価"] > 0].dropna(subset=["客単価"])
 
