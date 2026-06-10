@@ -286,8 +286,9 @@ def _build_df(rows: list[dict]) -> pd.DataFrame:
                 pass
 
     df["_line_total"] = df["unit_price"] * df["quantity"]
-    visit_total = df.groupby("receipt_no")["_line_total"].sum().rename("合計金額(税込)")
-    df = df.join(visit_total, on="receipt_no")
+    # receipt_no は複数来店で重複するため visit_time との複合キーで集計
+    group_key = ["receipt_no", "visit_time"] if "visit_time" in df.columns else ["receipt_no"]
+    df["合計金額(税込)"] = df.groupby(group_key)["_line_total"].transform("sum")
 
     df = df.rename(columns={
         "receipt_no":     "伝票番号",

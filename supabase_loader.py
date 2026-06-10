@@ -263,14 +263,10 @@ def fetch_sales_data(
             except Exception:
                 pass
 
-    # 伝票単位の合計金額（unit_price × quantity の合計）
+    # 伝票単位の合計金額（receipt_no は複数来店で重複するため visit_time との複合キーで集計）
     df["_line_total"] = df["unit_price"] * df["quantity"]
-    visit_total = (
-        df.groupby("receipt_no")["_line_total"]
-        .sum()
-        .rename("合計金額(税込)")
-    )
-    df = df.join(visit_total, on="receipt_no")
+    group_key = ["receipt_no", "visit_time"] if "visit_time" in df.columns else ["receipt_no"]
+    df["合計金額(税込)"] = df.groupby(group_key)["_line_total"].transform("sum")
 
     # カラム名を日本語にリネーム
     df = df.rename(columns={
