@@ -35,7 +35,6 @@ const infoStores      = $("info-stores");
 const kpiBar          = $("kpi-bar");
 const analysisGrid    = $("analysis-grid");
 const skeletonGrid    = $("skeleton-grid");
-const chatMsgs        = $("chat-msgs");
 const chatInput       = $("chat-input");
 const chatSendBtn     = $("chat-send-btn");
 const clearChatBtn    = $("clear-chat-btn");
@@ -234,7 +233,6 @@ function buildGraphCard(title, imageB64, insight, table, insights, advice) {
   const img = document.createElement("img");
   img.src = `data:image/png;base64,${imageB64}`;
   img.alt = title;
-  img.loading = "lazy";
   img.title = "クリックで拡大";
   img.addEventListener("click", () => openLightbox(img.src, title));
   card.appendChild(img);
@@ -613,14 +611,29 @@ async function onChatSend() {
     return;
   }
 
-  appendMsg("user", message);
   chatInput.value = "";
   chatSendBtn.disabled = true;
 
-  const loadingMsg = appendMsg("assistant", '<span class="spinner"></span> 分析中…');
-
   // チャットタブに自動切り替え
   document.querySelector(".tab[data-tab='chat']")?.click();
+
+  // メインエリア（chatGraphsArea）にローディングエントリーを表示
+  const emptyEl = chatGraphsArea.querySelector(".empty-state");
+  if (emptyEl) emptyEl.remove();
+
+  const loadingEntry = document.createElement("div");
+  loadingEntry.className = "chat-entry";
+  const loadingQ = document.createElement("div");
+  loadingQ.className = "chat-entry-question";
+  loadingQ.textContent = message;
+  const loadingA = document.createElement("div");
+  loadingA.className = "chat-entry-answer";
+  loadingA.style.color = "var(--text-muted)";
+  loadingA.innerHTML = '<span class="spinner"></span>&nbsp;LLM が分析中です…（最大2分）';
+  loadingEntry.appendChild(loadingQ);
+  loadingEntry.appendChild(loadingA);
+  chatGraphsArea.appendChild(loadingEntry);
+  loadingEntry.scrollIntoView({ behavior: "smooth", block: "start" });
 
   try {
     let result;
@@ -629,20 +642,17 @@ async function onChatSend() {
     } catch (e) {
       // セッション切れ（Railway再起動）の場合はデータ再取得を促す
       if (e.message?.includes("セッションが見つかりません") || e.message?.includes("404")) {
-        loadingMsg.innerHTML = "❌ セッションが切れています。データを再取得してください。";
+        loadingA.innerHTML = "❌ セッションが切れています。データを再取得してください。";
         showToast("セッション切れ: データを再取得してください。", "warn");
         chatSendBtn.disabled = false;
         return;
       }
       throw e;
     }
-    loadingMsg.remove();
 
-    // チャットグラフエリアの empty state を消す
-    const empty = chatGraphsArea.querySelector(".empty-state");
-    if (empty) empty.remove();
+    // ローディングエントリーを実際の結果エントリーに置き換え
+    loadingEntry.remove();
 
-    // メインエリアに質問 + 回答テキスト + グラフをまとめて表示
     const entry = document.createElement("div");
     entry.className = "chat-entry";
 
@@ -675,28 +685,23 @@ async function onChatSend() {
     }
 
     chatGraphsArea.appendChild(entry);
-    entry.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    // グラフがあれば最初のグラフカードが見えるようにスクロール、なければエントリ先頭
+    const firstGraph = entry.querySelector(".graph-card");
+    if (firstGraph) {
+      firstGraph.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } else {
+      entry.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
 
   } catch (e) {
-    loadingMsg.innerHTML = `❌ ${e.message}`;
+    loadingA.innerHTML = `❌ ${e.message}`;
     showToast(`チャットエラー: ${e.message}`, "error");
   } finally {
     chatSendBtn.disabled = false;
   }
 }
 
-function appendMsg(role, html) {
-  const div = document.createElement("div");
-  div.className = `msg msg-${role}`;
-  div.innerHTML = typeof html === "string"
-    ? html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>")
-    : html;
-  if (chatMsgs) {
-    chatMsgs.appendChild(div);
-    chatMsgs.scrollTop = chatMsgs.scrollHeight;
-  }
-  return div;
-}
 
 async function onClearChat() {
   if (!sessionId) return;
