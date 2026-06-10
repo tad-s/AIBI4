@@ -21,7 +21,7 @@ _env_path = Path(__file__).parent.parent.parent / ".env"  # C:\Users\tarchi\AIBI
 load_dotenv(dotenv_path=_env_path, override=False)
 load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
 
-app = FastAPI(title="AIBI4 V8", version="8.0.0")
+app = FastAPI(title="AIBI4 V8", version="8.0.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,7 +33,7 @@ app.add_middleware(
 # ── ヘルスチェック（StaticFiles mount より先に登録）──
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "8.0.0"}
+    return {"status": "ok", "version": "8.0.1"}
 
 # ── ルーター登録（StaticFiles mount より先に登録）──
 from data_router import router as data_router
