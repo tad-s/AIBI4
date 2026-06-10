@@ -147,6 +147,7 @@ CREATE OR REPLACE FUNCTION get_available_months(p_dataset TEXT DEFAULT 'izakaya'
 RETURNS TABLE(year_month TEXT)
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     v_table TEXT;
@@ -161,7 +162,7 @@ BEGIN
     RETURN QUERY EXECUTE format(
         $q$SELECT DISTINCT
                to_char(visit_time AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM')::TEXT
-           FROM %I
+           FROM public.%I
            WHERE visit_time IS NOT NULL
            ORDER BY 1$q$,
         v_table

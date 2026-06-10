@@ -131,6 +131,7 @@ async def get_months(dataset: str = "izakaya"):
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{SUPABASE_URL}/rest/v1/rpc/get_available_months",
+                params={"limit": 100},
                 json={"p_dataset": dataset},
                 headers=_sb_headers(),
             )
@@ -146,6 +147,19 @@ async def get_months(dataset: str = "izakaya"):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/debug/supabase")
+async def debug_supabase():
+    """接続先 Supabase プロジェクトを確認するデバッグ用エンドポイント。"""
+    import re
+    project_id = re.search(r"https://([^.]+)\.supabase\.co", SUPABASE_URL or "")
+    hint = project_id.group(1) if project_id else "(不明)"
+    return {
+        "supabase_project_id": hint,
+        "url_set": bool(SUPABASE_URL),
+        "key_set": bool(SUPABASE_KEY),
+    }
 
 
 @router.get("/stores")

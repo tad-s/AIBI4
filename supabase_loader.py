@@ -143,7 +143,7 @@ def fetch_available_months(client: Client, visits_table: str = "visits") -> list
     """
     dataset = _VISITS_TABLE_TO_DATASET.get(visits_table, "izakaya")
     try:
-        result = client.rpc("get_available_months", {"p_dataset": dataset}).execute()
+        result = client.rpc("get_available_months", {"p_dataset": dataset}).limit(100).execute()
         return [row["year_month"] for row in (result.data or [])]
     except Exception:
         return []
