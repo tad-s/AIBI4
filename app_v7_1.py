@@ -201,8 +201,18 @@ def _build_order_level_df(df: pd.DataFrame) -> pd.DataFrame | None:
         agg["ヘビー数"] = ("_is_heavy", "sum")
         agg["ライト数"] = ("_is_light", "sum")
 
-    odf = d.groupby(key_col).agg(**agg).reset_index()
-    odf.rename(columns={key_col: "注文ID"}, inplace=True)
+    # 居酒屋データは receipt_no が同日同店舗で重複するため来店時間との複合キーで集計
+    if key_col == "伝票番号" and "来店時間" in d.columns:
+        d["_basket_key"] = (
+            d["来店時間"].dt.strftime("%Y%m%d%H%M%S").fillna("?")
+            + "_" + d[key_col].astype(str)
+        )
+        groupby_col = "_basket_key"
+    else:
+        groupby_col = key_col
+
+    odf = d.groupby(groupby_col).agg(**agg).reset_index()
+    odf.rename(columns={groupby_col: "注文ID"}, inplace=True)
     odf["客単価"] = pd.to_numeric(odf["客単価"], errors="coerce")
     odf = odf[odf["客単価"] > 0].dropna(subset=["客単価"])
 
