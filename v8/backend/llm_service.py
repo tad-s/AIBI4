@@ -237,7 +237,7 @@ def _fig_has_content(fig) -> bool:
 def exec_graph_code(code: str, df: pd.DataFrame) -> dict:
     """LLM生成コードを実行し {"image_b64": str} または {"error": str} を返す。"""
     plt.close("all")
-    safe_globals = {"pd": pd, "np": np, "plt": plt, "matplotlib": matplotlib, "df": df}
+    safe_globals = {"pd": pd, "np": np, "plt": plt, "matplotlib": matplotlib, "df": df.copy()}
     try:
         cleaned = sanitize_code(code)
         exec(cleaned, safe_globals, {})  # noqa: S102
@@ -282,6 +282,11 @@ def call_llm_chat(summary_text: str, chat_history: list[dict],
         "【コードのルール（重要）】\n"
         "・pandas 2.0+ 使用中。Series.append() / DataFrame.append() は廃止。pd.concat() を使うこと。\n"
         "・np（numpy）は利用可能。\n"
+        "・各クエリのコードは毎回クリーンな df から独立して実行される。\n"
+        "  前のクエリで追加した year / month 等の派生列は df に存在しない。\n"
+        "  必ず df['注文日時'] や df['来店時間'] から .dt.year / .dt.month / .dt.to_period('M') で計算すること。\n"
+        "・groupby().unstack() でMultiIndex列になった場合は .droplevel(0, axis=1) や .xs() で列を取り出してから使うこと。\n"
+        "  例: pivot = df.groupby(['year','month'])['売上'].sum().unstack('year')  # 列は年のみ\n"
         + _GRAPH_QUALITY_RULES
     )
     if extra_system:
