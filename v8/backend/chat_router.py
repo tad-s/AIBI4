@@ -55,21 +55,29 @@ async def chat(sid: str, req: ChatRequest):
 
     # コード実行（グラフ生成）
     graphs = []
+    extra_texts: list[str] = []
     for code in code_blocks:
         result = await run_in_threadpool(exec_graph_code, code, df)
         graphs.append(result)
+        if result.get("text_output"):
+            extra_texts.append(result["text_output"])
+
+    # コード内の print() 出力をテキストに追記
+    combined_text = text_part
+    if extra_texts:
+        combined_text = (text_part + "\n\n" + "\n\n".join(extra_texts)).strip()
 
     # チャット結果をセッションに蓄積（Excel エクスポート用）
     chat_analyses = list(s.get("chat_analyses") or [])
     chat_analyses.append({
         "question": req.message,
-        "text":     text_part,
+        "text":     combined_text,
         "graphs":   [g for g in graphs if g.get("image_b64")],
     })
     sess.update_session(sid, chat_analyses=chat_analyses)
 
     return {
-        "text": text_part,
+        "text": combined_text,
         "graphs": graphs,
         "raw": raw_response,
     }

@@ -229,31 +229,61 @@ def _fig_has_content(fig) -> bool:
                 return True
             if (getattr(ax, "images", None) and len(ax.images) > 0):
                 return True
+            # ax.text()で追加された「データなし」などのテキストも有効なコンテンツとして扱う
+            if (getattr(ax, "texts", None) and len(ax.texts) > 0):
+                return True
         return False
     except Exception:
         return True
 
 
 def exec_graph_code(code: str, df: pd.DataFrame) -> dict:
-    """LLM生成コードを実行し {"image_b64": str} または {"error": str} を返す。"""
+    """LLM生成コードを実行し {"image_b64": str, "text_output": str} または {"error": str} を返す。
+    print()の出力は text_output として返す（集計結果テキスト表示に使用）。
+    スレッドセーフのため sys.stdout ではなくカスタム print 関数を注入する。
+    """
     plt.close("all")
-    safe_globals = {"pd": pd, "np": np, "plt": plt, "matplotlib": matplotlib, "df": df.copy()}
+
+    # カスタム print でコード内の出力をキャプチャ（sys.stdout を汚染しない）
+    output_lines: list[str] = []
+
+    def _captured_print(*args, **kwargs):
+        sep = kwargs.get("sep", " ")
+        end = kwargs.get("end", "\n")
+        output_lines.append(sep.join(str(a) for a in args) + end)
+
+    safe_globals = {
+        "pd": pd, "np": np, "plt": plt, "matplotlib": matplotlib,
+        "df": df.copy(), "print": _captured_print,
+    }
+    result: dict = {}
+
     try:
         cleaned = sanitize_code(code)
         exec(cleaned, safe_globals, {})  # noqa: S102
-        fig = plt.gcf()
-        if _fig_has_content(fig):
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-            buf.seek(0)
-            return {"image_b64": base64.b64encode(buf.read()).decode()}
-        else:
-            return {"error": "グラフが描画されませんでした（データ0件の可能性があります）。"}
     except Exception as e:
         tb = traceback.format_exc()
-        return {"error": str(e), "traceback": tb}
-    finally:
-        plt.close("all")
+        result = {"error": str(e), "traceback": tb}
+
+    text_output = "".join(output_lines).strip()
+
+    if not result:
+        fig = plt.gcf()
+        try:
+            if _fig_has_content(fig):
+                buf = io.BytesIO()
+                fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+                buf.seek(0)
+                result = {"image_b64": base64.b64encode(buf.read()).decode()}
+            else:
+                result = {"error": "グラフが描画されませんでした（データ0件の可能性があります）。"}
+        except Exception as e:
+            result = {"error": str(e)}
+
+    plt.close("all")
+    if text_output:
+        result["text_output"] = text_output
+    return result
 
 
 def call_llm_chat(summary_text: str, chat_history: list[dict],
@@ -268,13 +298,26 @@ def call_llm_chat(summary_text: str, chat_history: list[dict],
         "・pd.read_csv() / pd.read_excel() / open() などでファイルを読み込んではいけない\n"
         "・データは既に変数 df としてメモリ上に読み込まれている。必ず df をそのまま使うこと\n\n"
         "【質問の種類による回答方針】\n"
-        "■ グラフ不要な質問（以下に該当する場合）はテキストのみで回答し、コードブロックは出力しないこと：\n"
-        "  - 商品一覧・店舗一覧の確認（「〜は何がありますか」「〜を教えて」など）\n"
-        "  - データの件数・構造・定義の確認\n"
+        "■ グラフ不要な質問（以下に完全に該当する場合のみ）はテキストのみで回答し、コードブロックは出力しないこと：\n"
+        "  - 商品名・店舗名の単純な列挙確認（「どんな商品がありますか」「店舗一覧を見せて」など）\n"
+        "  - データの件数・構造・列定義の確認（「何行ありますか」「どんな列がありますか」など）\n"
         "  - 「セット商品は？」「どんなメニューがある？」などの一覧確認\n"
         "  - この場合、[AUTO_ANNOTATION] の補正情報は無視してよい\n"
-        "■ グラフが有用な質問（集計・比較・トレンド分析など）は以下のルールでグラフを作成：\n"
-        "  - 1〜3個のグラフを作成し、気づき（箇条書き2〜3個）と追加分析案（1〜2個）を含める\n"
+        "  ※「お勧め」「人気」「ランキング」「売れ筋」「上位」「比較」「分析」を含む質問は\n"
+        "    たとえ「〜を教えて」という形でも必ず集計・グラフを行うこと\n"
+        "\n■ ランキング・お勧め・人気・売れ筋など集計を伴う質問（「お勧め商品を教えて」など）：\n"
+        "  コードは1つのブロックにまとめ、以下の順で書くこと：\n"
+        "  STEP 1: print() で集計結果を番号付きリスト形式で出力する（df.to_string()などスペース揃えの表は使わない）\n"
+        "    正しい例:\n"
+        "      top_qty = df.groupby('商品名')['数量'].sum().nlargest(5)\n"
+        "      print('■ 売上数量 上位5商品:')\n"
+        "      for i, (name, qty) in enumerate(top_qty.items(), 1):\n"
+        "          print(f'{i}. {name}: {qty:,.0f}個')\n"
+        "  STEP 2: 同じブロック内で上位3〜10商品のバーチャートを1枚描画する\n"
+        "  ※ print()の出力はユーザーに直接表示されるので番号付きリスト形式にすること\n"
+        "  ※ コードブロックの前後にテキストで結果の解釈・示唆を2〜3行書くこと\n"
+        "\n■ トレンド・比較・時系列分析など通常のグラフ分析：\n"
+        "  - 1〜2個のグラフを作成し、気づき（箇条書き2〜3個）と追加分析案（1〜2個）を含める\n"
         "  - 店舗別などカテゴリが多すぎる場合は売上上位10〜20に絞る\n"
         "  - グラフ描画コードは必ず ```python ... ``` に入れる\n"
         "・ユーザーに再確認を求めてはいけない。dfから自分で件数や集計を計算する。\n"
