@@ -1,6 +1,6 @@
 # AIBI4 V8 開発ガイド
 
-最終更新: 2026-04-05
+最終更新: 2026-06-26
 
 ---
 
@@ -291,6 +291,70 @@ else:
 plt.rcParams["axes.unicode_minus"] = False
 ```
 
+### ❽ llm_service.py: exec_graph_code の DataFrame 参照（2026-06 修正）
+
+```python
+# NG: df を直接渡すとLLMコードが df に列追加→セッション上の df が汚染される
+safe_globals = {"df": df}  # NG
+
+# OK: コピーを渡す
+safe_globals = {"df": df.copy()}  # OK（セッションの df を変更しない）
+```
+
+### ❾ llm_service.py: print() 出力キャプチャ（2026-06 追加）
+
+LLMが生成したコード内の `print()` は集計結果（ランキング等）の表示に使う。
+`sys.stdout` をグローバルに差し替えると並列リクエスト時に干渉するため、
+`safe_globals` にカスタム `print` 関数を注入してスレッドセーフにキャプチャする。
+
+```python
+output_lines: list[str] = []
+
+def _captured_print(*args, **kwargs):
+    sep = kwargs.get("sep", " ")
+    end = kwargs.get("end", "\n")
+    output_lines.append(sep.join(str(a) for a in args) + end)
+
+safe_globals = {
+    "pd": pd, "np": np, "plt": plt, "matplotlib": matplotlib,
+    "df": df.copy(), "print": _captured_print,  # ← ここでカスタム print を注入
+}
+```
+
+`text_output = "".join(output_lines).strip()` で取り出し、`chat_router.py` 側で
+LLM のテキスト回答末尾に追記して `combined_text` として返す。
+
+### ❿ llm_service.py: _fig_has_content の texts チェック（2026-06 修正）
+
+```python
+# NG: ax.text() で「データなし」を描いても空判定になりエラーカード表示
+#    → ax.texts は patches/lines/collections 等と別扱い
+
+# OK: ax.texts チェックを追加
+if (getattr(ax, "texts", None) and len(ax.texts) > 0):
+    return True
+```
+
+`ax.texts` は `ax.text()` / `ax.annotate()` で明示的に追加した Text オブジェクトのみを含む
+（タイトル・軸ラベルは含まない）ため、誤検知なし。
+
+### ⓫ llm_service.py: システムプロンプトの質問分類（2026-06 修正）
+
+「を教えて」を"グラフ不要な一覧確認"の例示にしていたため、
+「お勧め商品を教えて」のようなランキング質問が誤って一覧系と判定されていた。
+
+```
+# 修正前（問題あり）
+■ グラフ不要な質問: 「〜を教えて」など
+
+# 修正後
+■ グラフ不要な質問: 「どんな商品がありますか」「店舗一覧を見せて」など単純な列挙確認のみ
+※「お勧め」「人気」「ランキング」「売れ筋」「上位」「比較」「分析」を含む質問は
+  たとえ「〜を教えて」という形でも必ず集計・グラフを行うこと
+```
+
+ランキング系質問では「1つのコードブロックに print() + グラフをまとめる」方式を明示。
+
 ---
 
 ## 7. フロントエンド構成
@@ -346,13 +410,11 @@ plt.rcParams["axes.unicode_minus"] = False
 
 ## 8. 今後の開発課題
 
-### 未着手
-- [ ] **Railway デプロイ**: `Dockerfile` と `railway.toml` は作成済みだが未検証
-  - 静的ファイルの配信方法（FastAPI StaticFiles のまま or 分離）を決める必要あり
-  - 環境変数を Railway のダッシュボードで設定する
+### 完了済み
+- [x] **Railway デプロイ**: 本番稼働中（`Dockerfile` + `railway.toml`）
+- [x] **チャット回答の品質改善**: print() キャプチャ・ランキング質問の分類修正（2026-06）
 
 ### 検討中
-- [ ] **ベース分析のインサイト表示確認**: ユーザーから「解説コメントがない」との報告あり。`analysis_service.py` にはインサイト生成コードが存在するが、実際にフロントエンドで表示されているか再確認が必要
 - [ ] **セッションの永続化**: 現在はインメモリのみ。サーバー再起動でデータが消える
 - [ ] **複数ユーザー対応**: セッションはすでに UUID 管理だが、本格運用時はデータ量に注意
 
