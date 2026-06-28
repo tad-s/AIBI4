@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 import session as sess
+import analysis_service
 from llm_service import build_data_summary
 
 router = APIRouter()
@@ -61,6 +62,23 @@ def _sb_headers() -> dict:
         "Content-Type":  "application/json",
         "Prefer":        "count=none",
     }
+
+
+async def _load_category_master() -> None:
+    """Supabase の item_category_master テーブルを取得して analysis_service に設定する。
+    テーブル未作成や取得失敗時はキーワードマッチにフォールバックするため例外を飲む。"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{SUPABASE_URL}/rest/v1/item_category_master",
+                params={"select": "item_name,category", "limit": 10000},
+                headers=_sb_headers(),
+            )
+        if resp.is_success and isinstance(resp.json(), list):
+            master = {row["item_name"]: row["category"] for row in resp.json()}
+            analysis_service.set_item_category_master(master)
+    except Exception:
+        pass
 
 
 def _week_ranges(start_date: str, end_date: str) -> list[tuple[str, str]]:
@@ -252,6 +270,9 @@ async def fetch_data(req: FetchRequest):
                     yield f"data: {json.dumps({'type':'progress','done':done,'total':total_chunks,'rows':len(all_rows),'pct':pct,'month':month_label})}\n\n"
 
         if all_rows:
+            # カテゴリマスタを取得（失敗時はキーワードマッチにフォールバック）
+            await _load_category_master()
+
             yield f"data: {json.dumps({'type':'processing','message':'データを整形中…'})}\n\n"
             loop = asyncio.get_running_loop()
             df = await loop.run_in_executor(None, _build_df, all_rows)

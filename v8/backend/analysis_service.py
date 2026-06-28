@@ -23,29 +23,56 @@ else:
     plt.rcParams["font.family"] = ["Noto Sans CJK JP", "IPAGothic", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
-# ── キーワード辞書 ──
+# ── キーワード辞書（優先順: 締め > ドリンク > 揚げ物 > 串 > 海鮮 > 鍋 > サラダ > ヘビー > 軽いつまみ） ──
 _DRINK_KW = [
     "ビール","生ビール","生中","生大","ハイボール","チューハイ","酎ハイ",
     "サワー","レモンサワー","梅サワー","ワイン","日本酒","冷酒","熱燗",
     "焼酎","麦焼酎","芋焼酎","泡盛","ホッピー","カクテル","梅酒",
     "ウーロン茶","お茶","緑茶","麦茶","コーラ","ジュース",
     "ソフトドリンク","ノンアルコール","ノンアル","ドリンク","ソーダ",
+    # 略称・省略形カバー
+    "ハイ","サワ","麦酒","ビア","ホッピ","ジョッキ","赤星","黒ラベル",
+    "ジンジャ","カシス","ロック","水割","お冷","ジャスミン",
 ]
-_HEAVY_KW = [
-    "唐揚げ","から揚げ","フライドチキン","揚げ","カツ","トンカツ",
-    "天ぷら","フライ","コロッケ","串カツ","串揚げ",
-    "焼き鳥","焼鳥","串焼き","焼肉","ステーキ","ハラミ","カルビ",
-    "豚バラ","ロース","ネギ塩","つくね","もも",
-    "鍋","おでん","煮込み","もつ煮",
+_SHIME_KW = [  # 締め（最優先）
     "ラーメン","うどん","そば","チャーハン","炒飯","焼きそば",
-    "ご飯","おにぎり","餃子","ピザ","グラタン",
+    "おにぎり","ご飯","雑炊","ちゃんぽん","カレー",
+    "焼き飯","焼飯","冷麺","蕎麦","パスタ","ナポリタン",
+    "ドリア","オムライス","ライス","釜飯","釜めし",
 ]
-_LIGHT_KW = [
-    "サラダ","野菜","枝豆","漬物","キムチ","冷奴","豆腐",
+_AGEMON_KW = [  # 揚げ物
+    "唐揚げ","から揚げ","フライドチキン","揚げ","揚",
+    "天ぷら","フライ","コロッケ","カツ","トンカツ","南蛮",
+    "串カツ","串揚げ",
+]
+_KUSHI_KW = [  # 串
+    "焼き鳥","焼鳥","串焼き","串",
+    "つくね","ねぎま",
+]
+_KAISEN_KW = [  # 海鮮
+    "刺身","刺し身","お刺身","刺し",
+    "カルパッチョ","マリネ",
+    "海老","えび","蟹","かに","たこ","いか","イカ",
+    "まぐろ","マグロ","サーモン","鮭","魚介","ホタテ","貝","あさり","牡蠣",
+    "海鮮","なめろ","たこわさ","いかわさ",
+]
+_NABE_KW = [  # 鍋
+    "鍋","おでん","しゃぶ","すき焼","チゲ",
+]
+_SALAD_KW = [  # サラダ
+    "サラダ","チョレギ",
+]
+_HEAVY_KW = [  # ヘビーフード（揚げ物・串・海鮮・鍋以外の主菜系）
+    "焼肉","ステーキ","ハラミ","カルビ",
+    "豚バラ","ロース","ネギ塩","もも",
+    "鉄板","炒め","煮込み","もつ煮","煮込",
+    "餃子","ピザ","グラタン",
+]
+_LIGHT_KW = [  # 軽いつまみ（サラダ・海鮮以外の小皿系）
+    "野菜","枝豆","漬物","キムチ","冷奴","豆腐",
     "おひたし","和え物","小鉢","酢の物",
-    "刺身","刺し身","お刺身","カルパッチョ","マリネ",
-    "たこわさ","いかわさ",
     "アヒージョ","ナムル","ポテサラ","玉子","卵焼き","しらす",
+    "ナム","漬け","生ハム","ポン酢",
 ]
 
 
@@ -53,6 +80,21 @@ def _kw_match(name, kw_list) -> bool:
     if pd.isna(name):
         return False
     return any(kw in str(name) for kw in kw_list)
+
+
+def _normalize_name(name: str) -> str:
+    """ひらがなをカタカナに変換してキーワードマッチ精度を上げる。"""
+    return "".join(chr(ord(c) + 0x60) if 0x3041 <= ord(c) <= 0x3096 else c for c in name)
+
+
+# 商品カテゴリマスタ（Supabase の item_category_master テーブルから起動時に取得）
+_ITEM_CATEGORY_MASTER: dict[str, str] = {}
+
+
+def set_item_category_master(d: dict[str, str]) -> None:
+    """data_router からデータ取得後に呼び出してマスタをセットする。"""
+    global _ITEM_CATEGORY_MASTER
+    _ITEM_CATEGORY_MASTER = d
 
 
 def _fig_to_b64(fig, dpi=150) -> str:
@@ -93,6 +135,9 @@ def build_order_df(df: pd.DataFrame) -> pd.DataFrame | None:
         return None
 
     d = df.copy()
+    # マスタで「除外」指定されたアイテム（モバイルオーダー等）を除去
+    if "商品名" in d.columns and _ITEM_CATEGORY_MASTER:
+        d = d[d["商品名"].apply(lambda x: _get_item_category(str(x)) if pd.notna(x) else "その他") != "除外"].copy()
     d[amount_col] = pd.to_numeric(d[amount_col], errors="coerce")
     if "来店時間" in d.columns:
         d["来店時間"] = pd.to_datetime(d["来店時間"], errors="coerce")
@@ -103,9 +148,13 @@ def build_order_df(df: pd.DataFrame) -> pd.DataFrame | None:
     if "人数" in d.columns:
         d["人数"] = pd.to_numeric(d["人数"], errors="coerce")
     if "商品名" in d.columns:
-        d["_is_drink"] = d["商品名"].apply(lambda x: _kw_match(x, _DRINK_KW)).astype(int)
-        d["_is_heavy"] = d["商品名"].apply(lambda x: _kw_match(x, _HEAVY_KW)).astype(int)
-        d["_is_light"] = d["商品名"].apply(lambda x: _kw_match(x, _LIGHT_KW)).astype(int)
+        # _get_item_category を使って分類（全カテゴリ体系と一致させる）
+        _cats = d["商品名"].apply(lambda x: _get_item_category(str(x)) if pd.notna(x) else "その他")
+        d["_is_drink"] = (_cats == "ドリンク").astype(int)
+        # ヘビー系=揚げ物・串・海鮮・鍋・ヘビーの合算（FD比率算出に使用）
+        _food_cats = {"揚げ物", "串", "海鮮", "鍋", "ヘビー"}
+        d["_is_heavy"] = _cats.isin(_food_cats).astype(int)
+        d["_is_light"] = _cats.isin({"軽いつまみ", "サラダ"}).astype(int)
 
     # receipt_no は同一店舗・同一日でも複数来店で重複するため来店時間との複合キーを使用
     if key_col == "伝票番号" and "来店時間" in d.columns:
@@ -907,31 +956,43 @@ def analysis_6_stay_time(order_df: pd.DataFrame | None) -> list[dict]:
 # order_time（注文日時）が必要な分析は izakaya / cafe データのみ対応。
 # ════════════════════════════════════════════════════════════════
 
-_SHIME_KW = [
-    "ラーメン", "うどん", "そば", "チャーハン", "炒飯", "焼きそば",
-    "おにぎり", "ご飯", "雑炊", "ちゃんぽん", "カレー",
+_CAT_ORDER = [
+    "ドリンク", "揚げ物", "串", "海鮮", "鍋", "サラダ", "ヘビー", "軽いつまみ", "締め", "その他",
 ]
-
-_CAT_ORDER  = ["ドリンク", "軽いつまみ", "ヘビー", "締め", "その他"]
 _CAT_COLORS = {
     "ドリンク":   "#5b9bd5",
-    "軽いつまみ": "#70ad47",
-    "ヘビー":     "#e74c3c",
+    "揚げ物":     "#f39c12",
+    "串":         "#e74c3c",
+    "海鮮":       "#1abc9c",
+    "鍋":         "#e67e22",
+    "サラダ":     "#70ad47",
+    "ヘビー":     "#c0392b",
+    "軽いつまみ": "#2ecc71",
     "締め":       "#9b59b6",
     "その他":     "#95a5a6",
 }
 
 
 def _get_item_category(name: str) -> str:
-    """商品名からカテゴリを返す（締め優先）。"""
-    if _kw_match(name, _SHIME_KW):
-        return "締め"
-    if _kw_match(name, _DRINK_KW):
-        return "ドリンク"
-    if _kw_match(name, _HEAVY_KW):
-        return "ヘビー"
-    if _kw_match(name, _LIGHT_KW):
-        return "軽いつまみ"
+    """商品名からカテゴリを返す。マスタ優先 → 正規化後キーワードマッチ。"""
+    if pd.isna(name):
+        return "その他"
+    name_str = str(name)
+    # 1. マスタテーブル完全一致（最優先）
+    if name_str in _ITEM_CATEGORY_MASTER:
+        return _ITEM_CATEGORY_MASTER[name_str]
+    # 2. ひらがな→カタカナ正規化（¶うーろん茶 → ¶ウーロン茶 等）
+    norm = _normalize_name(name_str)
+    # 3. キーワードマッチ（締め → ドリンク → 揚げ物 → 串 → 海鮮 → 鍋 → サラダ → ヘビー → 軽いつまみ）
+    if _kw_match(norm, _SHIME_KW):   return "締め"
+    if _kw_match(norm, _DRINK_KW):   return "ドリンク"
+    if _kw_match(norm, _AGEMON_KW):  return "揚げ物"
+    if _kw_match(norm, _KUSHI_KW):   return "串"
+    if _kw_match(norm, _KAISEN_KW):  return "海鮮"
+    if _kw_match(norm, _NABE_KW):    return "鍋"
+    if _kw_match(norm, _SALAD_KW):   return "サラダ"
+    if _kw_match(norm, _HEAVY_KW):   return "ヘビー"
+    if _kw_match(norm, _LIGHT_KW):   return "軽いつまみ"
     return "その他"
 
 
@@ -949,6 +1010,8 @@ def _build_order_waves_df(df: pd.DataFrame):
     d["_category"] = d["商品名"].apply(
         lambda x: _get_item_category(str(x)) if pd.notna(x) else "その他"
     )
+    # マスタで「除外」に設定されたアイテム（モバイルオーダー等）を除去
+    d = d[d["_category"] != "除外"].copy()
     if "来店時間" in d.columns:
         d["_visit_key"] = (
             d["来店時間"].astype(str).fillna("?") + "_" + d["伝票番号"].astype(str)
