@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIBI4 V9 — LLM BI アシスタント</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ===============================
+     SIDEBAR
+     =============================== -->
+<aside id="sidebar">
+
+  <!-- ヘッダー -->
+  <div class="sb-header">
+    <div class="sb-logo">
+      <svg class="sb-logo-icon" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1"   y="12" width="5" height="9" rx="1.5" fill="currentColor" opacity="0.5"/>
+        <rect x="8.5" y="7"  width="5" height="14" rx="1.5" fill="currentColor"/>
+        <rect x="16"  y="2"  width="5" height="19" rx="1.5" fill="currentColor" opacity="0.5"/>
+        <polyline points="3.5,10 11,5.5 18.5,1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>AIBI4 <small>v8.1</small></span>
+    </div>
+    <div id="sb-status" class="sb-status-badge hidden">● 読込済</div>
+  </div>
+
+  <!-- スクロール可能コントロールエリア -->
+  <div class="sb-controls">
+
+    <!-- データセット選択 -->
+    <div>
+      <div class="ctrl-label">📂 データセット</div>
+      <select id="dataset-select" class="dataset-select">
+        <option value="cafe">カフェ（Cafe Bloom）</option>
+        <option value="izakaya" selected>居酒屋</option>
+        <option value="bakery">ベーカリー（Farine）</option>
+        <option value="salon">美容院・サロン（Lumière）</option>
+      </select>
+    </div>
+
+    <!-- 分析期間 (チップ式) -->
+    <div>
+      <div class="ctrl-label">📅 分析期間</div>
+      <div id="month-chips" class="chip-group">
+        <span class="chip" style="pointer-events:none;opacity:.5">読み込み中…</span>
+      </div>
+      <div class="chip-hint">クリックで選択（複数可）</div>
+    </div>
+
+    <!-- 店舗フィルタ -->
+    <div>
+      <div class="ctrl-label">🏪 店舗フィルタ <span style="font-size:9px;color:var(--text-muted);text-transform:none;letter-spacing:0">（未選択 = 全店舗）</span></div>
+      <div class="store-search-wrap">
+        <input id="store-search" type="text" placeholder="店舗を絞り込む…">
+      </div>
+      <div id="store-list" class="store-list"></div>
+      <div id="store-preview" class="store-selected-preview"></div>
+    </div>
+
+  </div><!-- /sb-controls -->
+
+  <!-- 取得ボタン（常に表示） -->
+  <div class="fetch-area">
+    <button id="fetch-btn" class="btn btn-primary">
+      🔄 データを取得する
+    </button>
+  </div>
+
+  <!-- =====================
+       チャット (下部固定)
+       ===================== -->
+  <div class="sb-chat">
+
+    <div class="sb-chat-header">
+      <div class="ctrl-label">🧠 分析チャット</div>
+      <button id="clear-chat-btn" class="icon-btn-sm" title="履歴クリア">🗑</button>
+    </div>
+
+    <div class="chat-input-area">
+      <textarea id="chat-input" rows="2"
+        placeholder="例: 御茶ノ水店の先月売上は？ 商品別に見たい"
+        disabled></textarea>
+      <div class="chat-actions">
+        <button id="voice-btn" class="icon-btn" title="音声入力" disabled>🎤</button>
+        <button id="chat-send-btn" class="btn btn-accent" disabled>送信</button>
+      </div>
+    </div>
+
+  </div><!-- /sb-chat -->
+
+</aside>
+
+
+<!-- ===============================
+     MAIN
+     =============================== -->
+<main id="main">
+
+  <!-- ── 空の状態 ── -->
+  <div id="empty-state" class="empty-state">
+    <div class="empty-icon">📊</div>
+    <div class="empty-title">LLM BI アシスタント</div>
+    <div class="empty-desc">左パネルで分析期間と店舗を設定し、データを取得してください。</div>
+    <div class="empty-steps">
+      <div class="empty-step">
+        <div class="step-num">1</div>
+        <div class="step-text"><strong>分析期間</strong>を月単位でクリック選択（複数可）</div>
+      </div>
+      <div class="empty-step">
+        <div class="step-num">2</div>
+        <div class="step-text"><strong>店舗フィルタ</strong>を必要に応じて絞り込む（任意）</div>
+      </div>
+      <div class="empty-step">
+        <div class="step-num">3</div>
+        <div class="step-text">「<strong>データを取得する</strong>」をクリック → 12項目の分析が自動実行されます</div>
+      </div>
+      <div class="empty-step">
+        <div class="step-num">4</div>
+        <div class="step-text">左下の<strong>チャット</strong>で追加分析を指示（音声入力対応）</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 取得中状態 ── -->
+  <div id="fetch-state" style="display:none;">
+    <div class="fetch-progress-panel">
+      <div class="fp-title">📡 データを取得しています…</div>
+      <div class="fp-months" id="fp-months"></div>
+      <div class="fp-bar-wrap">
+        <div class="fp-bar-track">
+          <div id="fp-bar-fill" class="fp-bar-fill"></div>
+        </div>
+        <div id="fp-pct" class="fp-pct">0%</div>
+      </div>
+      <div id="fp-detail" class="fp-detail">接続中…</div>
+      <div id="fp-rows" class="fp-rows">累計 0 件取得</div>
+    </div>
+  </div>
+
+  <!-- ── 読込済状態 ── -->
+  <div id="loaded-state">
+
+    <!-- データ情報バー -->
+    <div class="data-info-bar">
+      <div class="data-info-item">
+        <div class="data-info-dot"></div>
+        <span>データ取得済</span>
+      </div>
+      <div class="data-info-item">📋 <strong id="info-rows">—</strong> 件</div>
+      <div class="data-info-item">📅 <strong id="info-months">—</strong></div>
+      <div class="data-info-item">🏪 <strong id="info-stores">—</strong></div>
+      <button id="export-btn" class="btn btn-export" disabled title="分析完了後にダウンロードできます">
+        📥 Excelエクスポート
+      </button>
+      <button id="evidence-btn" class="btn btn-export" disabled title="チャット履歴・分析結果・整合性確認ログをJSONでダウンロード">
+        🧾 エビデンスログ
+      </button>
+    </div>
+
+    <!-- KPI カード -->
+    <div id="kpi-bar" class="kpi-bar"></div>
+
+    <!-- タブナビゲーション -->
+    <div class="tabs" id="tab-nav">
+      <button class="tab active" data-tab="analysis">🔬 ベース分析（12項目）</button>
+      <button class="tab" data-tab="chat">💬 チャット分析</button>
+    </div>
+
+    <!-- タブパネル: ベース分析 -->
+    <div id="tab-analysis" class="tab-panel active">
+      <div id="analysis-grid" class="graph-grid">
+        <!-- スケルトン（分析実行前） -->
+        <div class="loading-grid" id="skeleton-grid" style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:16px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- タブパネル: チャット分析 -->
+    <div id="tab-chat" class="tab-panel">
+      <div id="chat-graphs-area" class="graph-grid">
+        <div class="empty-state" style="padding:40px 0;grid-column:1/-1;">
+          <div class="empty-icon" style="font-size:36px;opacity:.3;">💬</div>
+          <div class="empty-desc">左パネルのチャットで分析を指示すると<br>回答とグラフがここに表示されます。</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /loaded-state -->
+
+</main>
+
+<div id="toast"></div>
+
+<!-- ライトボックス -->
+<div id="img-modal" class="img-modal">
+  <div class="img-modal-backdrop"></div>
+  <div class="img-modal-content">
+    <button id="img-modal-close" class="img-modal-close" title="閉じる（Escキーでも閉じます）">✕</button>
+    <img id="img-modal-img" src="" alt="">
+    <div id="img-modal-title" class="img-modal-title"></div>
+  </div>
+</div>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
