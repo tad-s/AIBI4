@@ -1089,13 +1089,30 @@ def analysis_11_timeband_differences(order_df: pd.DataFrame | None) -> list[dict
     odf = order_df.copy()
     grp = odf.groupby("時間帯").agg(件数=("客単価", "count"), 平均客単価=("客単価", "mean"), 平均商品数=("商品数", "mean")).reset_index().sort_values("時間帯")
     fig, ax1 = plt.subplots(figsize=(10, 4))
-    ax1.plot(grp["時間帯"], grp["平均商品数"], marker="o", label="平均商品数", color="#3b6ee8")
-    ax1.set_ylabel("平均商品数")
+    line_qty, = ax1.plot(
+        grp["時間帯"],
+        grp["平均商品数"],
+        marker="o",
+        linewidth=2.5,
+        label="平均注文商品数（青・左軸）",
+        color="#3b6ee8",
+    )
+    ax1.set_ylabel("平均注文商品数", color="#3b6ee8")
+    ax1.tick_params(axis="y", labelcolor="#3b6ee8")
     ax1.set_xlabel("時間帯")
     ax2 = ax1.twinx()
-    ax2.plot(grp["時間帯"], grp["平均客単価"], marker="s", label="平均客単価", color="#e74c3c")
-    ax2.set_ylabel("平均客単価（円）")
-    ax1.set_title("時間帯別 平均商品数・平均客単価")
+    line_spend, = ax2.plot(
+        grp["時間帯"],
+        grp["平均客単価"],
+        marker="s",
+        linewidth=2.5,
+        label="平均客単価（赤・右軸）",
+        color="#e74c3c",
+    )
+    ax2.set_ylabel("平均客単価（円）", color="#e74c3c")
+    ax2.tick_params(axis="y", labelcolor="#e74c3c")
+    ax1.set_title("時間帯別 平均注文商品数（青・左軸）と平均客単価（赤・右軸）")
+    ax1.legend(handles=[line_qty, line_spend], loc="upper right", frameon=True, facecolor="white", framealpha=0.9)
     plt.tight_layout()
     top_qty = grp.loc[grp["平均商品数"].idxmax()]
     return [{
