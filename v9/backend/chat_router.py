@@ -27,6 +27,7 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     message: str
+    new_chat: bool = False
 
 
 _AMBIGUOUS_PATTERNS = re.compile(
@@ -78,8 +79,8 @@ async def chat(sid: str, req: ChatRequest):
         raise HTTPException(status_code=400, detail="データが取得されていません。")
 
     summary_text = s.get("summary_text", "")
-    chat_history: list[dict] = list(s.get("chat_history") or [])
-    pending = s.get("pending_analysis")
+    chat_history: list[dict] = [] if req.new_chat else list(s.get("chat_history") or [])
+    pending = None if req.new_chat else s.get("pending_analysis")
 
     needs_clarify, clarify_text = _needs_clarification(req.message, pending)
     if needs_clarify:
@@ -111,7 +112,7 @@ async def chat(sid: str, req: ChatRequest):
 
     raw_response = await run_in_threadpool(call_llm_chat, summary_text, chat_history, extra_system)
     chat_history.append({"role": "assistant", "content": raw_response})
-    sess.update_session(sid, chat_history=chat_history)
+    sess.update_session(sid, chat_history=chat_history, pending_analysis=None)
 
     text_part, code_blocks = parse_llm_response(raw_response)
 
@@ -134,6 +135,7 @@ async def chat(sid: str, req: ChatRequest):
     chat_analyses.append({
         "question": req.message,
         "effective_message": effective_message,
+        "new_chat": bool(req.new_chat),
         "text": combined_text,
         "graphs": [g for g in graphs if g.get("image_b64")],
     })
@@ -142,6 +144,7 @@ async def chat(sid: str, req: ChatRequest):
     _append_evidence(sid, {
         "type": "chat_analysis",
         "question": req.message,
+        "new_chat": bool(req.new_chat),
         "effective_message": effective_message,
         "answer_excerpt": combined_text[:1200],
         "code_blocks": len(code_blocks),

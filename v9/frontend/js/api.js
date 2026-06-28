@@ -92,14 +92,14 @@ export async function runAnalysis(sid) {
   return r.json();
 }
 
-export async function chat(sid, message) {
+export async function chat(sid, message, newChat = false) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000); // 2分タイムアウト
   try {
     const r = await fetch(`${BASE}/api/chat/${sid}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, new_chat: newChat }),
       signal: controller.signal,
     });
     clearTimeout(timer);
