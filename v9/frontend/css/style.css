@@ -62,9 +62,9 @@ body { background: var(--bg); color: var(--text); display: flex; overflow: hidde
   flex-shrink: 0;
   background: var(--surface);
 }
-.sb-logo { font-size: 16px; font-weight: 800; letter-spacing: .3px; color: var(--accent); display: flex; align-items: center; gap: 6px; }
-.sb-logo small { font-size: 10px; font-weight: 400; color: var(--text-muted); margin-left: 2px; }
-.sb-logo-icon { width: 30px; height: 30px; flex-shrink: 0; color: var(--accent); }
+.sb-logo { font-size: 16px; font-weight: 800; letter-spacing: .3px; color: #b42318; display: flex; align-items: center; gap: 6px; }
+.sb-logo small { font-size: 10px; font-weight: 700; color: #d92d20; margin-left: 2px; }
+.sb-logo-icon { width: 30px; height: 30px; flex-shrink: 0; color: #d92d20; }
 .sb-status-badge {
   margin-left: auto;
   background: rgba(26,156,82,.12);
