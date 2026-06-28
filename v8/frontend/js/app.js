@@ -37,6 +37,7 @@ const analysisGrid    = $("analysis-grid");
 const skeletonGrid    = $("skeleton-grid");
 const chatInput       = $("chat-input");
 const chatSendBtn     = $("chat-send-btn");
+const chatNewSendBtn  = $("chat-new-send-btn");
 const clearChatBtn    = $("clear-chat-btn");
 const voiceBtn        = $("voice-btn");
 const chatGraphsArea  = $("chat-graphs-area");
@@ -403,12 +404,13 @@ async function init() {
   }
 
   fetchBtn.addEventListener("click", onFetchClick);
-  chatSendBtn.addEventListener("click", onChatSend);
+  chatSendBtn.addEventListener("click", () => onChatSend(false));
+  chatNewSendBtn.addEventListener("click", () => onChatSend(true));
   clearChatBtn.addEventListener("click", onClearChat);
   voiceBtn.addEventListener("click", onVoiceClick);
   exportBtn.addEventListener("click", onExportExcel);
   chatInput.addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onChatSend(); }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onChatSend(false); }
   });
 }
 
@@ -519,6 +521,7 @@ async function onFetchClick() {
     // チャット有効化
     chatInput.disabled = false;
     chatSendBtn.disabled = false;
+    chatNewSendBtn.disabled = false;
     voiceBtn.disabled = !VoiceRecorder.isSupported();
 
     showToast("データ取得完了！6項目の分析を実行中です。", "success");
@@ -586,7 +589,7 @@ async function onExportExcel() {
 }
 
 // ── チャット ──
-async function onChatSend() {
+async function onChatSend(newChat = false) {
   const message = chatInput.value.trim();
   if (!message) return;
   if (chatInput.disabled) {
@@ -600,6 +603,7 @@ async function onChatSend() {
 
   chatInput.value = "";
   chatSendBtn.disabled = true;
+  chatNewSendBtn.disabled = true;
 
   // チャットタブに自動切り替え
   document.querySelector(".tab[data-tab='chat']")?.click();
@@ -612,7 +616,7 @@ async function onChatSend() {
   loadingEntry.className = "chat-entry";
   const loadingQ = document.createElement("div");
   loadingQ.className = "chat-entry-question";
-  loadingQ.textContent = message;
+  loadingQ.textContent = newChat ? `【新規チャット】${message}` : message;
   const loadingA = document.createElement("div");
   loadingA.className = "chat-entry-answer";
   loadingA.style.color = "var(--text-muted)";
@@ -625,13 +629,14 @@ async function onChatSend() {
   try {
     let result;
     try {
-      result = await api.chat(sessionId, message);
+      result = await api.chat(sessionId, message, newChat);
     } catch (e) {
       // セッション切れ（Railway再起動）の場合はデータ再取得を促す
       if (e.message?.includes("セッションが見つかりません") || e.message?.includes("404")) {
         loadingA.innerHTML = "❌ セッションが切れています。データを再取得してください。";
         showToast("セッション切れ: データを再取得してください。", "warn");
         chatSendBtn.disabled = false;
+        chatNewSendBtn.disabled = false;
         return;
       }
       throw e;
@@ -645,12 +650,15 @@ async function onChatSend() {
 
     const qDiv = document.createElement("div");
     qDiv.className = "chat-entry-question";
-    qDiv.textContent = message;
+    qDiv.textContent = newChat ? `【新規チャット】${message}` : message;
     entry.appendChild(qDiv);
 
     if (result.text) {
       const aDiv = document.createElement("div");
-      aDiv.className = "chat-entry-answer";
+      // 確認が必要な場合は視覚的に区別する
+      aDiv.className = result.clarification_needed
+        ? "chat-entry-answer chat-entry-clarification"
+        : "chat-entry-answer";
       aDiv.innerHTML = result.text
         .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
         .replace(/\n/g, "<br>");
@@ -686,6 +694,7 @@ async function onChatSend() {
     showToast(`チャットエラー: ${e.message}`, "error");
   } finally {
     chatSendBtn.disabled = false;
+    chatNewSendBtn.disabled = false;
   }
 }
 

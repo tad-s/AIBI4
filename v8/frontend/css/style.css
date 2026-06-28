@@ -315,7 +315,8 @@ body { background: var(--bg); color: var(--text); display: flex; overflow: hidde
 #chat-input:disabled { opacity: .4; }
 #chat-input::placeholder { color: var(--text-muted); }
 
-.chat-actions { display: flex; align-items: center; gap: 6px; }
+.chat-actions { display: grid; grid-template-columns: 32px 1fr 82px; align-items: center; gap: 6px; }
+.btn-chat-new { padding: 8px 10px; font-size: 11px; line-height: 1.2; white-space: normal; }
 .icon-btn {
   width: 32px; height: 32px; border-radius: var(--radius-sm);
   background: var(--surface2); border: 1px solid var(--border);
@@ -800,6 +801,12 @@ details > .table-wrap { padding: 10px; overflow-x: auto; background: var(--surfa
   padding: 0 4px;
 }
 .chat-entry-answer strong { color: var(--text); }
+.chat-entry-clarification {
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 10px 12px;
+}
 .chat-entry-graphs {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
