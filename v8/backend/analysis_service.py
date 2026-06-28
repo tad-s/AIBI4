@@ -1584,8 +1584,9 @@ def analysis_segment_scenario(df: pd.DataFrame) -> list[dict]:
     v_seg = df2.drop_duplicates(subset=["_vk"]).set_index("_vk")["客層"]
     v_max = waves.groupby("_visit_key")["_wave_no"].max()
 
-    seg_df = pd.DataFrame({"max_wave": v_max, "seg": v_seg}).dropna()
-    if seg_df.empty or seg_df["seg"].nunique() < 2:
+    seg_df = pd.DataFrame({"max_wave": v_max, "seg": v_seg}).dropna(subset=["max_wave"])
+    seg_df["seg"] = seg_df["seg"].fillna("不明")
+    if seg_df.empty:
         return _no_order_time("分析G 顧客セグメント × 注文シナリオ（客層データ不足）")
 
     seg_grp = (
@@ -1605,7 +1606,8 @@ def analysis_segment_scenario(df: pd.DataFrame) -> list[dict]:
         return "フード系/その他"
 
     fw_pat    = fw_cats.apply(_cls)
-    ps_df     = pd.DataFrame({"pattern": fw_pat, "seg": v_seg}).dropna()
+    ps_df     = pd.DataFrame({"pattern": fw_pat, "seg": v_seg}).dropna(subset=["pattern"])
+    ps_df["seg"] = ps_df["seg"].fillna("不明")
     cross     = ps_df.groupby(["seg", "pattern"]).size().unstack(fill_value=0)
     pat_order = ["ドリンク＋フード", "ドリンクのみ", "フード系/その他"]
     cross     = cross.reindex(columns=[p for p in pat_order if p in cross.columns], fill_value=0)
