@@ -902,15 +902,786 @@ def analysis_6_stay_time(order_df: pd.DataFrame | None) -> list[dict]:
     return results
 
 
+# ════════════════════════════════════════════════════════════════
+# 注文シナリオ分析（A〜G）
+# order_time（注文日時）が必要な分析は izakaya / cafe データのみ対応。
+# ════════════════════════════════════════════════════════════════
+
+_SHIME_KW = [
+    "ラーメン", "うどん", "そば", "チャーハン", "炒飯", "焼きそば",
+    "おにぎり", "ご飯", "雑炊", "ちゃんぽん", "カレー",
+]
+
+_CAT_ORDER  = ["ドリンク", "軽いつまみ", "ヘビー", "締め", "その他"]
+_CAT_COLORS = {
+    "ドリンク":   "#5b9bd5",
+    "軽いつまみ": "#70ad47",
+    "ヘビー":     "#e74c3c",
+    "締め":       "#9b59b6",
+    "その他":     "#95a5a6",
+}
+
+
+def _get_item_category(name: str) -> str:
+    """商品名からカテゴリを返す（締め優先）。"""
+    if _kw_match(name, _SHIME_KW):
+        return "締め"
+    if _kw_match(name, _DRINK_KW):
+        return "ドリンク"
+    if _kw_match(name, _HEAVY_KW):
+        return "ヘビー"
+    if _kw_match(name, _LIGHT_KW):
+        return "軽いつまみ"
+    return "その他"
+
+
+def _build_order_waves_df(df: pd.DataFrame):
+    """注文日時ベースで _visit_key / _wave_no / _category を付与したDFを返す。
+    注文日時列がない or 有効値が 10 件未満の場合は None。"""
+    if "注文日時" not in df.columns:
+        return None
+    ot = pd.to_datetime(df["注文日時"], errors="coerce")
+    if ot.notna().sum() < 10:
+        return None
+
+    d = df.copy()
+    d["注文日時"] = ot
+    d["_category"] = d["商品名"].apply(
+        lambda x: _get_item_category(str(x)) if pd.notna(x) else "その他"
+    )
+    if "来店時間" in d.columns:
+        d["_visit_key"] = (
+            d["来店時間"].astype(str).fillna("?") + "_" + d["伝票番号"].astype(str)
+        )
+    else:
+        d["_visit_key"] = d["伝票番号"].astype(str)
+
+    def _assign(grp):
+        valid = grp["注文日時"].dropna().sort_values().unique()
+        t2w   = {t: i + 1 for i, t in enumerate(valid)}
+        g     = grp.copy()
+        g["_wave_no"] = g["注文日時"].map(
+            lambda t: t2w.get(t, 0) if pd.notna(t) else 0
+        )
+        return g
+
+    d = d.groupby("_visit_key", group_keys=False).apply(_assign)
+    d = d[d["_wave_no"] > 0].reset_index(drop=True)
+    return d if len(d) >= 10 else None
+
+
+def _no_order_time(title: str) -> list[dict]:
+    return [{
+        "title": title,
+        "image_b64": _placeholder_b64(
+            "この分析は izakaya / cafe データのみ対応\n（注文日時情報が必要です）"
+        ),
+        "insight": "注文日時データがないため分析できません（izakaya/cafe を選択してください）。",
+        "insights": ["izakaya / cafe データセットを選択すると表示されます。"],
+        "advice": [],
+        "table": None,
+        "evidence_tables": [],
+    }]
+
+
+# ── 分析A: 売れるメニューの組み合わせ ────────────────────────────────
+def analysis_menu_combinations(df: pd.DataFrame) -> list[dict]:
+    """同一ラウンドの同時注文ペア TOP10 と、次ラウンドへの連続注文ペア TOP10。"""
+    waves = _build_order_waves_df(df)
+    if waves is None:
+        return _no_order_time("分析A 売れるメニューの組み合わせ")
+
+    sim_cnt: Counter = Counter()
+    seq_cnt: Counter = Counter()
+    sim_den: Counter = Counter()
+    seq_den: Counter = Counter()
+
+    for vk, grp in waves.groupby("_visit_key"):
+        w_items: dict = {}
+        for wno, wg in grp.groupby("_wave_no"):
+            items = set(wg["商品名"].dropna().astype(str).tolist())
+            w_items[wno] = items
+
+        wkeys = sorted(w_items)
+        for wno in wkeys:
+            items = list(w_items[wno])
+            for itm in items:
+                sim_den[itm] += 1
+            for a, b in combinations(set(items), 2):
+                a, b = tuple(sorted([a, b]))
+                sim_cnt[(a, b)] += 1
+        for i in range(len(wkeys) - 1):
+            cur = w_items[wkeys[i]]
+            nxt = w_items[wkeys[i + 1]]
+            for itm in cur:
+                seq_den[itm] += 1
+            for a in cur:
+                for b in nxt:
+                    if a != b:
+                        seq_cnt[(a, b)] += 1
+
+    top_sim = sim_cnt.most_common(10)
+    top_seq = seq_cnt.most_common(10)
+
+    fig1, ax1 = plt.subplots(figsize=(9, 5))
+    if top_sim:
+        lbls1 = [f"{a} × {b}" for (a, b), _ in top_sim]
+        vals1 = [cnt / max(sim_den.get(a, 1), 1) * 100 for (a, b), cnt in top_sim]
+        ax1.barh(lbls1[::-1], vals1[::-1], color="#5b9bd5", edgecolor="white")
+        for y, v in enumerate(vals1[::-1]):
+            ax1.text(v + 0.4, y, f"{v:.1f}%", va="center", fontsize=9)
+        ax1.set_xlim(0, max(vals1) * 1.3)
+    ax1.set_xlabel("同時注文率（%）")
+    ax1.set_title("同時注文ペア TOP10（同一ラウンドで一緒に注文される割合）")
+    plt.tight_layout()
+
+    ev_sim = [
+        {"商品ペア": f"{a} × {b}", "同時注文件数": cnt,
+         "同時注文率(%)": round(cnt / max(sim_den.get(a, 1), 1) * 100, 1)}
+        for (a, b), cnt in top_sim
+    ]
+
+    fig2, ax2 = plt.subplots(figsize=(9, 5))
+    if top_seq:
+        lbls2 = [f"{a} → {b}" for (a, b), _ in top_seq]
+        vals2 = [cnt / max(seq_den.get(a, 1), 1) * 100 for (a, b), cnt in top_seq]
+        ax2.barh(lbls2[::-1], vals2[::-1], color="#e74c3c", edgecolor="white")
+        for y, v in enumerate(vals2[::-1]):
+            ax2.text(v + 0.4, y, f"{v:.1f}%", va="center", fontsize=9)
+        ax2.set_xlim(0, max(vals2) * 1.3)
+    ax2.set_xlabel("連続注文率（%）")
+    ax2.set_title("連続注文ペア TOP10（前ラウンドのAの次にBが注文される割合）")
+    plt.tight_layout()
+
+    ev_seq = [
+        {"先行商品": a, "次に注文": b, "連続件数": cnt,
+         "連続注文率(%)": round(cnt / max(seq_den.get(a, 1), 1) * 100, 1)}
+        for (a, b), cnt in top_seq
+    ]
+
+    top1_sim = f"{top_sim[0][0][0]} × {top_sim[0][0][1]}" if top_sim else "—"
+    top1_seq = f"{top_seq[0][0][0]} → {top_seq[0][0][1]}" if top_seq else "—"
+    r1_sim   = ev_sim[0]["同時注文率(%)"] if ev_sim else 0
+    r1_seq   = ev_seq[0]["連続注文率(%)"] if ev_seq else 0
+
+    return [
+        {
+            "title": "分析A 同時注文ペア TOP10",
+            "image_b64": _fig_to_b64(fig1),
+            "insight": f"最多同時ペア: {top1_sim}（{r1_sim:.1f}%）",
+            "insights": [
+                f"No.1 同時ペア: **{top_sim[0][0][0]}** × **{top_sim[0][0][1]}**（同時率 {r1_sim:.1f}%）" if top_sim else "データなし",
+                "同一ラウンドで一緒に注文されるペア = セット推奨・卓上POPに最適",
+            ],
+            "advice": [
+                "上位ペアをセットメニューや追加推奨スクリプトに組み込む",
+                "ドリンク×フードの同時ペアはファーストオーダー誘導に特に有効",
+            ],
+            "table": ev_sim[:5],
+            "evidence_tables": [{"title": "同時注文ペア全件", "records": ev_sim}],
+        },
+        {
+            "title": "分析A 連続注文ペア TOP10",
+            "image_b64": _fig_to_b64(fig2),
+            "insight": f"最多連続ペア: {top1_seq}（{r1_seq:.1f}%）",
+            "insights": [
+                f"No.1 連続ペア: **{top_seq[0][0][0]}** → **{top_seq[0][0][1]}**（連続率 {r1_seq:.1f}%）" if top_seq else "データなし",
+                "次ラウンドで何が注文されやすいか = 追加注文推奨の具体的材料",
+            ],
+            "advice": [
+                "先行商品が注文されたら連続ペアの商品を次ラウンドで口頭推奨する",
+                "連続率の高い組み合わせはコースメニューの順序設計に活用できる",
+            ],
+            "table": ev_seq[:5],
+            "evidence_tables": [{"title": "連続注文ペア全件", "records": ev_seq}],
+        },
+    ]
+
+
+# ── 分析B: 注文の流れ ──────────────────────────────────────────────
+def analysis_order_flow(df: pd.DataFrame) -> list[dict]:
+    """ラウンド別カテゴリ構成比（積み上げ棒）と主要遷移パターン。"""
+    waves = _build_order_waves_df(df)
+    if waves is None:
+        return _no_order_time("分析B 注文の流れ")
+
+    def wave_grp(n):
+        if n == 1: return "1ラウンド目"
+        if n == 2: return "2ラウンド目"
+        if n == 3: return "3ラウンド目"
+        return "4ラウンド目以降"
+
+    waves["_wgrp"] = waves["_wave_no"].apply(wave_grp)
+    w_order = ["1ラウンド目", "2ラウンド目", "3ラウンド目", "4ラウンド目以降"]
+
+    pivot = waves.groupby(["_wgrp", "_category"]).size().unstack(fill_value=0)
+    pivot = pivot.reindex(columns=[c for c in _CAT_ORDER if c in pivot.columns], fill_value=0)
+    pct   = pivot.div(pivot.sum(axis=1), axis=0) * 100
+    pct   = pct.reindex([w for w in w_order if w in pct.index])
+
+    fig1, ax1 = plt.subplots(figsize=(9, 5))
+    bot = np.zeros(len(pct))
+    for cat in pct.columns:
+        color = _CAT_COLORS.get(cat, "#95a5a6")
+        bars  = ax1.bar(pct.index, pct[cat], bottom=bot, label=cat, color=color)
+        for bar, b in zip(bars, bot):
+            h = bar.get_height()
+            if h > 7:
+                ax1.text(bar.get_x() + bar.get_width() / 2, b + h / 2,
+                         f"{h:.0f}%", ha="center", va="center", fontsize=8, color="white")
+        bot += pct[cat].values
+    ax1.set_xlabel("注文ラウンド")
+    ax1.set_ylabel("割合 (%)")
+    ax1.set_title("注文ラウンド別 カテゴリ構成比")
+    ax1.legend(loc="upper right", fontsize=8)
+    ax1.set_ylim(0, 108)
+    plt.tight_layout()
+
+    trans: Counter = Counter()
+    for vk, grp in waves.groupby("_visit_key"):
+        dom = (
+            grp.sort_values("_wave_no")
+            .groupby("_wave_no")["_category"]
+            .apply(lambda s: Counter(s).most_common(1)[0][0])
+        )
+        wns = sorted(dom.index)
+        for i in range(len(wns) - 1):
+            trans[(dom[wns[i]], dom[wns[i + 1]])] += 1
+
+    top_trans = trans.most_common(8)
+    total_tr  = sum(trans.values()) or 1
+
+    fig2, ax2 = plt.subplots(figsize=(9, 5))
+    if top_trans:
+        tlbls = [f"{a} → {b}" for (a, b), _ in top_trans]
+        tvals = [cnt / total_tr * 100 for _, cnt in top_trans]
+        tcols = [_CAT_COLORS.get(b, "#95a5a6") for (a, b), _ in top_trans]
+        ax2.barh(tlbls[::-1], tvals[::-1], color=tcols[::-1], edgecolor="white")
+        for y, v in enumerate(tvals[::-1]):
+            ax2.text(v + 0.3, y, f"{v:.1f}%", va="center", fontsize=9)
+        ax2.set_xlim(0, max(tvals) * 1.3)
+    ax2.set_xlabel("遷移割合（全遷移中の%）")
+    ax2.set_title("カテゴリ遷移パターン TOP8")
+    plt.tight_layout()
+
+    ev_pct = pct.reset_index().rename(columns={"_wgrp": "ラウンド"}).round(1).to_dict("records")
+    ev_tr  = [{"遷移": f"{a}→{b}", "件数": cnt, "割合(%)": round(cnt / total_tr * 100, 1)}
+              for (a, b), cnt in top_trans]
+
+    d1_pct = float(pct.loc["1ラウンド目", "ドリンク"]) if "1ラウンド目" in pct.index and "ドリンク" in pct.columns else 0
+    top_tr = top_trans[0] if top_trans else (("—", "—"), 0)
+    avg_w  = float(waves.groupby("_visit_key")["_wave_no"].max().mean())
+
+    insights = [
+        f"1ラウンド目: ドリンク **{d1_pct:.0f}%** — 来店直後は飲み物が最優先",
+        f"最多遷移パターン: **{top_tr[0][0]} → {top_tr[0][1]}** ({top_tr[1] / total_tr * 100:.1f}%)",
+        f"平均注文ラウンド数: {avg_w:.1f} ラウンド / 来店",
+    ]
+    advice = [
+        "1ラウンド目でドリンクのみ注文の客へフードを声がけし、2ラウンド継続率を引き上げる",
+        f"最多遷移「{top_tr[0][0]} → {top_tr[0][1]}」を基本推奨シナリオとしてスタッフに共有する",
+    ]
+
+    return [
+        {
+            "title": "分析B 注文の流れ — ラウンド別カテゴリ構成",
+            "image_b64": _fig_to_b64(fig1),
+            "insight": f"1ラウンド目: ドリンク {d1_pct:.0f}%。最多遷移: {top_tr[0][0]}→{top_tr[0][1]}",
+            "insights": insights,
+            "advice": advice,
+            "table": ev_pct,
+            "evidence_tables": [{"title": "ラウンド別カテゴリ構成比(%)", "records": ev_pct}],
+        },
+        {
+            "title": "分析B 注文の流れ — カテゴリ遷移パターン",
+            "image_b64": _fig_to_b64(fig2),
+            "insight": f"最多遷移: {top_tr[0][0]} → {top_tr[0][1]} ({top_tr[1] / total_tr * 100:.1f}%)",
+            "insights": insights,
+            "advice": advice,
+            "table": ev_tr,
+            "evidence_tables": [{"title": "カテゴリ遷移パターン", "records": ev_tr}],
+        },
+    ]
+
+
+# ── 分析C: 初期注文の影響 ──────────────────────────────────────────
+def analysis_first_order_impact(df: pd.DataFrame) -> list[dict]:
+    """1ラウンド目の内容が総注文品数・客単価に与える影響。"""
+    waves = _build_order_waves_df(df)
+    if waves is None:
+        return _no_order_time("分析C 初期注文の影響")
+
+    fw      = waves[waves["_wave_no"] == 1]
+    fw_cats = fw.groupby("_visit_key")["_category"].apply(lambda s: frozenset(s.unique()))
+
+    def _cls(cats):
+        has_d = "ドリンク" in cats
+        has_f = bool(cats - {"ドリンク", "その他"})
+        if has_d and has_f: return "ドリンク＋フード"
+        if has_d:           return "ドリンクのみ"
+        if has_f:           return "フードのみ"
+        return "その他"
+
+    fw_pat = fw_cats.apply(_cls)
+    qty_col = "数量" if "数量" in waves.columns else None
+    v_items = waves.groupby("_visit_key")[qty_col].sum() if qty_col else waves.groupby("_visit_key")["商品名"].count()
+
+    combined = pd.DataFrame({"items": v_items, "pattern": fw_pat}).dropna()
+
+    if "合計金額(税込)" in df.columns:
+        if "来店時間" in df.columns:
+            _vk = df["来店時間"].astype(str).fillna("?") + "_" + df["伝票番号"].astype(str)
+        else:
+            _vk = df["伝票番号"].astype(str)
+        spend = df.assign(_vk=_vk).drop_duplicates(subset=["_vk"]).set_index("_vk")["合計金額(税込)"]
+        combined["spend"] = spend
+
+    pat_order = ["ドリンクのみ", "ドリンク＋フード", "フードのみ", "その他"]
+    pats      = [p for p in pat_order if p in combined["pattern"].values]
+    grp_i     = combined.groupby("pattern")["items"].agg(["mean", "count"]).reindex(pats)
+
+    n_cols = 2 if "spend" in combined.columns else 1
+    fig, axes = plt.subplots(1, n_cols, figsize=(11 if n_cols == 2 else 7, 5))
+    if n_cols == 1:
+        axes = [axes]
+
+    pal  = {"ドリンクのみ": "#5b9bd5", "ドリンク＋フード": "#70ad47", "フードのみ": "#e74c3c", "その他": "#95a5a6"}
+    cols = [pal.get(p, "#95a5a6") for p in pats]
+
+    bars0 = axes[0].bar(pats, grp_i["mean"], color=cols, edgecolor="white")
+    for bar in bars0:
+        axes[0].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
+                     f"{bar.get_height():.1f}品", ha="center", va="bottom", fontsize=9)
+    axes[0].set_xlabel("初期注文パターン")
+    axes[0].set_ylabel("平均総注文品数")
+    axes[0].set_title("初期注文パターン別 平均総注文品数")
+    plt.setp(axes[0].get_xticklabels(), rotation=20, ha="right")
+
+    if "spend" in combined.columns:
+        grp_s = combined.groupby("pattern")["spend"].mean().reindex(pats)
+        bars1 = axes[1].bar(pats, grp_s, color=cols, edgecolor="white")
+        for bar in bars1:
+            axes[1].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 100,
+                         f"¥{bar.get_height():,.0f}", ha="center", va="bottom", fontsize=9)
+        axes[1].set_xlabel("初期注文パターン")
+        axes[1].set_ylabel("平均客単価（円）")
+        axes[1].set_title("初期注文パターン別 平均客単価")
+        plt.setp(axes[1].get_xticklabels(), rotation=20, ha="right")
+    plt.tight_layout()
+
+    ev = []
+    for p in pats:
+        row = {"初期注文パターン": p,
+               "件数": int(grp_i.loc[p, "count"]),
+               "平均注文品数": round(float(grp_i.loc[p, "mean"]), 2)}
+        if "spend" in combined.columns:
+            row["平均客単価(円)"] = round(float(combined[combined["pattern"] == p]["spend"].mean()), 0)
+        ev.append(row)
+
+    best = grp_i["mean"].idxmax() if not grp_i.empty else "—"
+    bv   = float(grp_i["mean"].max()) if not grp_i.empty else 0
+
+    return [{
+        "title": "分析C 初期注文の影響",
+        "image_b64": _fig_to_b64(fig),
+        "insight": f"初期「{best}」で最も多く注文（平均 {bv:.1f} 品）",
+        "insights": [
+            f"初期パターン「**{best}**」の来店客は平均 {bv:.1f} 品と最も多く注文",
+            "ドリンク＋フードで始めるとその後の注文が伸びる傾向",
+            "「ドリンクのみ」スタートの客へのフード追加誘導が最重要施策",
+        ],
+        "advice": [
+            "ファーストオーダーでドリンク＋フードを同時に取るよう声がけを標準化する",
+            "「まずはこちらもどうぞ」形式で初期セット推奨を卓上POPで補強する",
+        ],
+        "table": ev,
+        "evidence_tables": [{"title": "初期注文パターン別集計", "records": ev}],
+    }]
+
+
+# ── 分析D: 注文の連鎖条件 ──────────────────────────────────────────
+def analysis_order_chain(df: pd.DataFrame) -> list[dict]:
+    """ラウンド数分布とラウンド間継続確率（離脱ポイント可視化）。"""
+    waves = _build_order_waves_df(df)
+    if waves is None:
+        return _no_order_time("分析D 注文の連鎖条件")
+
+    v_max = waves.groupby("_visit_key")["_wave_no"].max()
+    total = len(v_max)
+    max_w = min(int(v_max.max()), 6)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    reach = [(v_max >= n).mean() * 100 for n in range(1, max_w + 1)]
+    xlbls = [f"{n}R" for n in range(1, max_w + 1)]
+    rcols = ["#5b9bd5" if n <= 2 else "#e74c3c" if n <= 4 else "#9b59b6" for n in range(1, max_w + 1)]
+    bars1 = ax1.bar(xlbls, reach, color=rcols, edgecolor="white")
+    for bar, v in zip(bars1, reach):
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
+                 f"{v:.1f}%", ha="center", va="bottom", fontsize=9)
+    ax1.set_xlabel("ラウンド数")
+    ax1.set_ylabel("到達率 (%)")
+    ax1.set_title("Nラウンド以上注文した来店客の割合")
+    ax1.set_ylim(0, 115)
+
+    cprobs = []
+    for n in range(1, max_w):
+        rn  = (v_max >= n).sum()
+        rn1 = (v_max >= n + 1).sum()
+        cprobs.append(rn1 / rn * 100 if rn > 0 else 0)
+
+    if cprobs:
+        x2 = [f"{n}→{n+1}R" for n in range(1, max_w)]
+        ax2.plot(range(len(x2)), cprobs, marker="o", color="#e74c3c", linewidth=2.5, zorder=5)
+        ax2.fill_between(range(len(x2)), cprobs, alpha=0.15, color="#e74c3c")
+        for i, v in enumerate(cprobs):
+            ax2.annotate(f"{v:.1f}%", (i, v), xytext=(0, 8), textcoords="offset points",
+                         ha="center", fontsize=9)
+        ax2.set_xticks(range(len(x2)))
+        ax2.set_xticklabels(x2, rotation=20, ha="right")
+    ax2.set_ylabel("継続確率 (%)")
+    ax2.set_title("ラウンド間継続確率（N→N+1ラウンドへ進む割合）")
+    ax2.set_ylim(0, 105)
+    plt.tight_layout()
+
+    avg_w  = float(v_max.mean())
+    drop1  = cprobs[0] if cprobs else 0
+    wdist  = v_max.value_counts().sort_index()
+
+    if cprobs:
+        min_i    = int(np.argmin(cprobs))
+        drop_pt  = min_i + 1
+        drop_val = 100 - cprobs[min_i]
+    else:
+        drop_pt, drop_val = 1, 0
+
+    ev_dist = [{"ラウンド数": int(k), "件数": int(v), "割合(%)": round(v / total * 100, 1)} for k, v in wdist.items()]
+    ev_cont = [{"遷移": f"{n}→{n+1}R", "継続確率(%)": round(cprobs[n - 1], 1)} for n in range(1, max_w)]
+
+    return [{
+        "title": "分析D 注文の連鎖条件",
+        "image_b64": _fig_to_b64(fig),
+        "insight": f"平均 {avg_w:.1f} ラウンド / 来店。1→2R 継続率: {drop1:.1f}%",
+        "insights": [
+            f"平均 **{avg_w:.1f} ラウンド** / 来店",
+            f"1→2ラウンド継続率: **{drop1:.1f}%** — ここが最大の離脱ポイント",
+            f"最大脱落: **{drop_pt}→{drop_pt + 1}ラウンド** ({drop_val:.1f}%が次ラウンドに進まない)",
+        ],
+        "advice": [
+            "最初のオーダー後すぐに追加注文の声がけを行い、2ラウンド目を確保する",
+            "2ラウンド目を取れた客はそれ以降も継続しやすい — 初動声がけに集中投資する",
+        ],
+        "table": ev_cont,
+        "evidence_tables": [
+            {"title": "ラウンド数分布", "records": ev_dist},
+            {"title": "ラウンド間継続確率", "records": ev_cont},
+        ],
+    }]
+
+
+# ── 分析E: 時間帯別の違い ──────────────────────────────────────────
+def analysis_timeslot_ordering(df: pd.DataFrame) -> list[dict]:
+    """時間帯（来店時間）別の平均注文品数・客単価・カテゴリ構成比。"""
+    if "来店時間" not in df.columns or df["来店時間"].isna().all():
+        return _no_order_time("分析E 時間帯別の違い")
+
+    d = df.copy()
+    d["_hour"] = pd.to_datetime(d["来店時間"], errors="coerce").dt.hour
+    d = d.dropna(subset=["_hour"])
+    if len(d) < 10:
+        return _no_order_time("分析E 時間帯別の違い")
+
+    d["_category"]  = d["商品名"].apply(
+        lambda x: _get_item_category(str(x)) if pd.notna(x) else "その他"
+    )
+    d["_visit_key"] = d["来店時間"].astype(str).fillna("?") + "_" + d["伝票番号"].astype(str)
+
+    qty_col = "数量" if "数量" in d.columns else None
+    v_items = d.groupby("_visit_key")[qty_col].sum() if qty_col else d.groupby("_visit_key")["商品名"].count()
+    v_hour  = d.drop_duplicates(subset=["_visit_key"]).set_index("_visit_key")["_hour"]
+    hour_df = pd.DataFrame({"hour": v_hour, "items": v_items}).dropna()
+
+    if "合計金額(税込)" in d.columns:
+        v_spend = d.drop_duplicates(subset=["_visit_key"]).set_index("_visit_key")["合計金額(税込)"]
+        hour_df["spend"] = v_spend
+
+    hgrp = hour_df.groupby("hour").agg(avg_items=("items", "mean"), n=("items", "count"))
+    if "spend" in hour_df.columns:
+        hgrp["avg_spend"] = hour_df.groupby("hour")["spend"].mean()
+
+    d2     = d.merge(v_hour.rename("hour").reset_index(), on="_visit_key", how="left")
+    cp     = d2.groupby(["hour", "_category"]).size().unstack(fill_value=0)
+    cp     = cp.reindex(columns=[c for c in _CAT_ORDER if c in cp.columns], fill_value=0)
+    cp_pct = cp.div(cp.sum(axis=1), axis=0) * 100
+
+    hours = sorted(hgrp.index)
+    xlbls = [f"{h}時" for h in hours]
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 9))
+
+    ax1r = ax1.twinx()
+    ax1.bar(xlbls, hgrp.loc[hours, "avg_items"], color="#5b9bd5", alpha=0.75, label="平均注文品数")
+    for i, v in enumerate(hgrp.loc[hours, "avg_items"]):
+        ax1.text(i, v + 0.05, f"{v:.1f}", ha="center", va="bottom", fontsize=8)
+    if "avg_spend" in hgrp.columns:
+        ax1r.plot(xlbls, hgrp.loc[hours, "avg_spend"], marker="o", color="#e74c3c",
+                  linewidth=2, label="平均客単価")
+        ax1r.set_ylabel("平均客単価（円）", color="#e74c3c")
+    ax1.set_ylabel("平均注文品数")
+    ax1.set_title("時間帯別 平均注文品数 × 平均客単価")
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax1r.get_legend_handles_labels()
+    ax1.legend(h1 + h2, l1 + l2, loc="upper left", fontsize=8)
+    plt.setp(ax1.get_xticklabels(), rotation=30, ha="right")
+
+    cp_s = cp_pct.reindex(sorted(cp_pct.index))
+    x2l  = [f"{h}時" for h in cp_s.index]
+    bot2 = np.zeros(len(cp_s))
+    for cat in cp_s.columns:
+        ax2.bar(x2l, cp_s[cat], bottom=bot2, label=cat, color=_CAT_COLORS.get(cat, "#95a5a6"))
+        for i, (v, b) in enumerate(zip(cp_s[cat], bot2)):
+            if v > 9:
+                ax2.text(i, b + v / 2, f"{v:.0f}%", ha="center", va="center", fontsize=7, color="white")
+        bot2 += cp_s[cat].values
+    ax2.set_xlabel("来店時間帯")
+    ax2.set_ylabel("割合 (%)")
+    ax2.set_title("時間帯別 注文カテゴリ構成比")
+    ax2.legend(loc="upper right", fontsize=8)
+    ax2.set_ylim(0, 108)
+    plt.setp(ax2.get_xticklabels(), rotation=30, ha="right")
+    plt.tight_layout()
+
+    peak_h = int(hgrp["avg_items"].idxmax()) if not hgrp.empty else 0
+    peak_v = float(hgrp["avg_items"].max())   if not hgrp.empty else 0
+
+    ev_hour = []
+    for h in hours:
+        row = {"時間帯": f"{h}時台", "平均注文品数": round(float(hgrp.loc[h, "avg_items"]), 2),
+               "来客数": int(hgrp.loc[h, "n"])}
+        if "avg_spend" in hgrp.columns:
+            row["平均客単価(円)"] = round(float(hgrp.loc[h, "avg_spend"]), 0)
+        ev_hour.append(row)
+
+    ev_cat = cp_pct.reset_index().rename(columns={"hour": "時間帯(時)"}).round(1).to_dict("records")
+
+    return [{
+        "title": "分析E 時間帯別の違い",
+        "image_b64": _fig_to_b64(fig),
+        "insight": f"注文ピーク: {peak_h}時台（平均 {peak_v:.1f} 品）",
+        "insights": [
+            f"注文品数ピーク: **{peak_h}時台**（平均 {peak_v:.1f} 品）",
+            "時間帯によってカテゴリ構成が異なる — 早い時間帯はドリンク中心、遅くなるほどフード比率が上昇",
+        ],
+        "advice": [
+            f"{peak_h}時台はドリンク消費が速いため、追加注文の声がけ間隔を短めに設定する",
+            "20時以降はフードと締め料理の推奨を重点的に行う",
+        ],
+        "table": ev_hour,
+        "evidence_tables": [
+            {"title": "時間帯別集計", "records": ev_hour},
+            {"title": "時間帯別カテゴリ構成(%)", "records": ev_cat},
+        ],
+    }]
+
+
+# ── 分析F: 注文が止まるポイント ─────────────────────────────────────
+def analysis_order_stoppage(df: pd.DataFrame) -> list[dict]:
+    """伝票あたり注文品数の分布と、ラウンドごとの継続率（脱落可視化）。"""
+    waves = _build_order_waves_df(df)
+    if waves is None:
+        return _no_order_time("分析F 注文が止まるポイント")
+
+    qty_col = "数量" if "数量" in waves.columns else None
+    v_items = waves.groupby("_visit_key")[qty_col].sum() if qty_col else waves.groupby("_visit_key")["商品名"].count()
+    v_max   = waves.groupby("_visit_key")["_wave_no"].max()
+    max_w   = min(int(v_max.max()), 6)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    q95     = float(v_items.quantile(0.95))
+    clipped = v_items.clip(upper=q95)
+    bins    = max(10, int(q95 / 2))
+    ax1.hist(clipped, bins=bins, color="#5b9bd5", edgecolor="white", alpha=0.8)
+    ax1r = ax1.twinx()
+    sv   = np.sort(v_items.values)
+    cu   = np.arange(1, len(sv) + 1) / len(sv) * 100
+    ax1r.plot(sv, cu, color="#e74c3c", linewidth=1.5, linestyle="--")
+    ax1r.set_ylabel("累積 (%)", color="#e74c3c")
+    p50 = float(np.percentile(v_items, 50))
+    p80 = float(np.percentile(v_items, 80))
+    ax1.axvline(p50, color="#e67e22", linestyle=":", linewidth=1.5, label=f"中央値={p50:.0f}品")
+    ax1.axvline(p80, color="#c0392b", linestyle=":", linewidth=1.5, label=f"80%ile={p80:.0f}品")
+    ax1.set_xlabel("総注文品数")
+    ax1.set_ylabel("来店件数")
+    ax1.set_title("伝票あたり注文品数の分布")
+    ax1.legend(fontsize=8)
+
+    stay  = [(v_max >= n).mean() * 100 for n in range(1, max_w + 1)]
+    xlbls = [f"{n}R" for n in range(1, max_w + 1)]
+    scols = ["#5b9bd5" if n <= 2 else "#e74c3c" for n in range(1, max_w + 1)]
+    ax2.bar(xlbls, stay, color=scols, edgecolor="white")
+    for i, v in enumerate(stay):
+        ax2.text(i, v + 0.5, f"{v:.1f}%", ha="center", va="bottom", fontsize=9)
+    for i in range(len(stay) - 1):
+        drop = stay[i] - stay[i + 1]
+        ax2.annotate(f"↓{drop:.1f}%",
+                     xy=(i + 0.5, (stay[i] + stay[i + 1]) / 2),
+                     fontsize=7, ha="center", color="#c0392b")
+    ax2.set_ylabel("継続率 (%)")
+    ax2.set_title("ラウンドごとの注文継続率")
+    ax2.set_ylim(0, 115)
+    plt.tight_layout()
+
+    drops = [(n, stay[n - 1] - stay[n]) for n in range(1, max_w)]
+    md    = max(drops, key=lambda x: x[1]) if drops else (1, 0)
+    drop_pt, drop_val = md[0], md[1]
+
+    med = float(np.median(v_items))
+    avg = float(v_items.mean())
+
+    ev_stat = [
+        {"統計": "中央値（品数）", "値": round(med, 1)},
+        {"統計": "平均（品数）",   "値": round(avg, 1)},
+        {"統計": "50%ile",         "値": round(p50, 1)},
+        {"統計": "80%ile",         "値": round(p80, 1)},
+    ]
+    ev_stay = [{"ラウンド": f"{n}R", "継続率(%)": round(stay[n - 1], 1)} for n in range(1, max_w + 1)]
+
+    return [{
+        "title": "分析F 注文が止まるポイント",
+        "image_b64": _fig_to_b64(fig),
+        "insight": f"中央値 {med:.0f} 品。最大脱落: {drop_pt}→{drop_pt + 1}R ({drop_val:.1f}%脱落)",
+        "insights": [
+            f"注文品数の中央値: **{med:.0f} 品**。80% の来店客は {p80:.0f} 品以下で終了",
+            f"最大脱落ポイント: **{drop_pt}→{drop_pt + 1}ラウンド** ({drop_val:.1f}%が次ラウンドに進まない)",
+            "このタイミングへの追加声がけが客単価最大化のカギ",
+        ],
+        "advice": [
+            f"{drop_pt}ラウンド目終了後に積極的な追加推奨を行う",
+            "中央値未満で終わった客へのアフターフォロー（締め推奨など）で客単価を底上げする",
+        ],
+        "table": ev_stay,
+        "evidence_tables": [
+            {"title": "注文品数分布統計", "records": ev_stat},
+            {"title": "ラウンド継続率", "records": ev_stay},
+        ],
+    }]
+
+
+# ── 分析G: 顧客セグメント × 注文シナリオ ──────────────────────────────
+def analysis_segment_scenario(df: pd.DataFrame) -> list[dict]:
+    """客層別の注文ラウンド数・初期注文パターン構成比。"""
+    waves = _build_order_waves_df(df)
+    if waves is None or "客層" not in df.columns:
+        return _no_order_time("分析G 顧客セグメント × 注文シナリオ")
+
+    df2 = df.copy()
+    if "来店時間" in df2.columns:
+        df2["_vk"] = df2["来店時間"].astype(str).fillna("?") + "_" + df2["伝票番号"].astype(str)
+    else:
+        df2["_vk"] = df2["伝票番号"].astype(str)
+
+    v_seg = df2.drop_duplicates(subset=["_vk"]).set_index("_vk")["客層"]
+    v_max = waves.groupby("_visit_key")["_wave_no"].max()
+
+    seg_df = pd.DataFrame({"max_wave": v_max, "seg": v_seg}).dropna()
+    if seg_df.empty or seg_df["seg"].nunique() < 2:
+        return _no_order_time("分析G 顧客セグメント × 注文シナリオ（客層データ不足）")
+
+    seg_grp = (
+        seg_df.groupby("seg")
+        .agg(avg_wave=("max_wave", "mean"), n=("max_wave", "count"))
+        .sort_values("avg_wave", ascending=False)
+    )
+
+    fw      = waves[waves["_wave_no"] == 1]
+    fw_cats = fw.groupby("_visit_key")["_category"].apply(lambda s: frozenset(s.unique()))
+
+    def _cls(cats):
+        has_d = "ドリンク" in cats
+        has_f = bool(cats - {"ドリンク", "その他"})
+        if has_d and has_f: return "ドリンク＋フード"
+        if has_d:           return "ドリンクのみ"
+        return "フード系/その他"
+
+    fw_pat    = fw_cats.apply(_cls)
+    ps_df     = pd.DataFrame({"pattern": fw_pat, "seg": v_seg}).dropna()
+    cross     = ps_df.groupby(["seg", "pattern"]).size().unstack(fill_value=0)
+    pat_order = ["ドリンク＋フード", "ドリンクのみ", "フード系/その他"]
+    cross     = cross.reindex(columns=[p for p in pat_order if p in cross.columns], fill_value=0)
+    cross_pct = cross.div(cross.sum(axis=1), axis=0) * 100
+    cross_pct = cross_pct.reindex(seg_grp.index, fill_value=0)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    seg_pal = {"VIP": "#c0392b", "会員": "#e67e22", "リピーター": "#27ae60",
+               "新規": "#5b9bd5", "一般": "#95a5a6"}
+    scols = [seg_pal.get(s, "#95a5a6") for s in seg_grp.index]
+
+    bars1 = ax1.bar(seg_grp.index, seg_grp["avg_wave"], color=scols, edgecolor="white")
+    for bar in bars1:
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.03,
+                 f"{bar.get_height():.1f}", ha="center", va="bottom", fontsize=9)
+    ax1.set_xlabel("客層")
+    ax1.set_ylabel("平均注文ラウンド数")
+    ax1.set_title("客層別 平均注文ラウンド数")
+
+    pat_pal = {"ドリンク＋フード": "#70ad47", "ドリンクのみ": "#5b9bd5", "フード系/その他": "#e74c3c"}
+    bot2    = np.zeros(len(cross_pct))
+    for pat in cross_pct.columns:
+        ax2.bar(cross_pct.index, cross_pct[pat], bottom=bot2,
+                label=pat, color=pat_pal.get(pat, "#95a5a6"))
+        bot2 += cross_pct[pat].values
+    ax2.set_xlabel("客層")
+    ax2.set_ylabel("割合 (%)")
+    ax2.set_title("客層別 初期注文パターン構成比")
+    ax2.legend(loc="upper right", fontsize=8)
+    ax2.set_ylim(0, 108)
+    plt.tight_layout()
+
+    top_s = seg_grp.index[0] if not seg_grp.empty else "—"
+    top_v = float(seg_grp.iloc[0]["avg_wave"]) if not seg_grp.empty else 0
+    low_s = seg_grp.index[-1] if len(seg_grp) > 1 else "—"
+    low_v = float(seg_grp.iloc[-1]["avg_wave"]) if len(seg_grp) > 1 else 0
+
+    ev_seg = (
+        seg_grp.reset_index()
+        .rename(columns={"seg": "客層", "avg_wave": "平均ラウンド数", "n": "件数"})
+        .round(2).to_dict("records")
+    )
+    ev_pat = cross_pct.reset_index().rename(columns={"seg": "客層"}).round(1).to_dict("records")
+
+    return [{
+        "title": "分析G 顧客セグメント × 注文シナリオ",
+        "image_b64": _fig_to_b64(fig),
+        "insight": f"最多ラウンド: {top_s}（{top_v:.1f}R）。最少: {low_s}（{low_v:.1f}R）",
+        "insights": [
+            f"**{top_s}** 客層が最も多くのラウンドを注文（平均 {top_v:.1f} ラウンド）",
+            f"**{low_s}** 客層は平均 {low_v:.1f} ラウンドで最も早く注文が止まる — 追加誘導のポテンシャル大",
+            "客層ごとに初期注文パターンが異なる — 接客アプローチの差別化が有効",
+        ],
+        "advice": [
+            f"「{low_s}」客にはファーストオーダー後すぐにフードを提案し、ラウンド数を引き上げる",
+            f"「{top_s}」の注文パターンをモデルケースとして接客マニュアルに組み込む",
+        ],
+        "table": ev_seg,
+        "evidence_tables": [
+            {"title": "客層別注文ラウンド集計", "records": ev_seg},
+            {"title": "客層別初期パターン構成比(%)", "records": ev_pat},
+        ],
+    }]
+
+
 def run_all_analyses(df: pd.DataFrame) -> list[dict]:
-    """6項目の分析を一括実行し、結果リストを返す。"""
+    """既存6項目 + 注文シナリオ分析 A〜G の合計13項目を一括実行する。"""
     order_df = build_order_df(df)
-    results = []
+    results: list[dict] = []
+
+    # 既存分析 ①②③⑤⑥（④ basket は新分析 A に置き換え）
     for fn in [
         analysis_1_variable_regression,
         analysis_2_product_regression,
         analysis_3_abc_analysis,
-        analysis_4_basket,
         analysis_5_dayhour_heatmap,
         analysis_6_stay_time,
     ]:
@@ -921,6 +1692,33 @@ def run_all_analyses(df: pd.DataFrame) -> list[dict]:
                 "title": fn.__name__,
                 "image_b64": _placeholder_b64(f"エラー: {e}"),
                 "insight": str(e),
+                "insights": [str(e)],
+                "advice": [],
                 "table": None,
+                "evidence_tables": [],
             })
+
+    # 注文シナリオ分析 A〜G（order_time 必要 / izakaya・cafe のみ有効）
+    for fn in [
+        analysis_menu_combinations,
+        analysis_order_flow,
+        analysis_first_order_impact,
+        analysis_order_chain,
+        analysis_timeslot_ordering,
+        analysis_order_stoppage,
+        analysis_segment_scenario,
+    ]:
+        try:
+            results.extend(fn(df))
+        except Exception as e:
+            results.append({
+                "title": fn.__name__,
+                "image_b64": _placeholder_b64(f"エラー: {e}"),
+                "insight": str(e),
+                "insights": [str(e)],
+                "advice": [],
+                "table": None,
+                "evidence_tables": [],
+            })
+
     return results

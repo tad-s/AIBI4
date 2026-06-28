@@ -204,6 +204,143 @@ def _build_excel(analyses: list[dict], chat_analyses: list[dict], df, summary_te
     return out
 
 
+def _build_evidence_excel(analyses: list[dict], df) -> io.BytesIO:
+    """分析結果の evidence_tables を証跡 Excel として出力する。"""
+    import openpyxl
+    import openpyxl.utils
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    def hdr_fill():
+        return PatternFill(start_color=_HDR_BG, end_color=_HDR_BG, fill_type="solid")
+
+    def bg_fill(color):
+        return PatternFill(start_color=color, end_color=color, fill_type="solid")
+
+    def set_hdr(ws, row, col, value):
+        c = ws.cell(row=row, column=col, value=value)
+        c.fill = hdr_fill()
+        c.font = Font(color=_HDR_FG, bold=True, size=10)
+        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    def write_table(ws, table, start_row):
+        if not table:
+            return
+        headers = list(table[0].keys())
+        for ci, h in enumerate(headers, 1):
+            set_hdr(ws, start_row, ci, h)
+            ws.column_dimensions[openpyxl.utils.get_column_letter(ci)].width = 22
+        for ri, row_data in enumerate(table, start=start_row + 1):
+            for ci, h in enumerate(headers, 1):
+                v = row_data.get(h, "")
+                cell = ws.cell(row=ri, column=ci, value=v)
+                cell.alignment = Alignment(wrap_text=True)
+                if ri % 2 == 0:
+                    cell.fill = bg_fill("F8FAFF")
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    # ─── サマリーシート ───
+    ws0 = wb.create_sheet("証跡_サマリー")
+    ws0.column_dimensions["A"].width = 28
+    ws0.column_dimensions["B"].width = 52
+
+    ws0["A1"].value = "AIBI4 分析証跡レポート"
+    ws0["A1"].font  = Font(bold=True, size=16, color=_BLUE)
+    ws0.merge_cells("A1:B1")
+    ws0.row_dimensions[1].height = 28
+
+    info = [
+        ("出力日時",   datetime.now().strftime("%Y-%m-%d %H:%M")),
+        ("データ件数", f"{len(df):,} 行" if df is not None else "—"),
+        ("分析件数",   f"{len(analyses)} 項目"),
+        ("証跡テーブル数", str(sum(len(a.get("evidence_tables") or []) for a in analyses))),
+    ]
+    for i, (k, v) in enumerate(info, start=3):
+        ws0.cell(row=i, column=1, value=k).font = Font(bold=True)
+        ws0.cell(row=i, column=2, value=v)
+
+    # 分析一覧
+    set_hdr(ws0, 9, 1, "分析タイトル")
+    set_hdr(ws0, 9, 2, "サマリー")
+    for ri, a in enumerate(analyses, start=10):
+        ws0.cell(row=ri, column=1, value=a.get("title", "")).font = Font(bold=True)
+        c = ws0.cell(row=ri, column=2, value=a.get("insight", ""))
+        c.alignment = Alignment(wrap_text=True)
+        ws0.row_dimensions[ri].height = 20
+
+    # ─── 各分析の evidence_tables をシートに出力 ───
+    used_names: dict = {}
+    for a in analyses:
+        ev_tables = a.get("evidence_tables") or []
+        if not ev_tables:
+            continue
+        a_title = a.get("title", "分析")
+        prefix  = a_title[:12].strip()
+        for tbl in ev_tables:
+            tbl_title = tbl.get("title", "データ")
+            records   = tbl.get("records") or []
+            if not records:
+                continue
+            # シート名（31文字制限 + 重複回避）
+            raw_name = f"{prefix}_{tbl_title}"[:28]
+            if raw_name in used_names:
+                used_names[raw_name] += 1
+                sheet_name = f"{raw_name}_{used_names[raw_name]}"[:31]
+            else:
+                used_names[raw_name] = 0
+                sheet_name = raw_name[:31]
+
+            ws = wb.create_sheet(sheet_name)
+            ws.column_dimensions["A"].width = 22
+
+            # ヘッダー情報
+            ws["A1"].value = a_title
+            ws["A1"].font  = Font(bold=True, size=12, color=_BLUE)
+            ws.merge_cells(f"A1:D1")
+            ws.row_dimensions[1].height = 22
+
+            ws["A2"].value = tbl_title
+            ws["A2"].font  = Font(bold=True, size=10)
+            ws.merge_cells(f"A2:D2")
+
+            write_table(ws, records, 4)
+
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return out
+
+
+@router.get("/sessions/{sid}/evidence")
+def export_evidence(sid: str):
+    """分析の証跡データ（元データ集計）を Excel でダウンロードする。"""
+    try:
+        import openpyxl  # noqa: F401
+    except ImportError:
+        raise HTTPException(status_code=500, detail="openpyxl がインストールされていません。")
+
+    s = sess.get_session(sid)
+    if not s:
+        raise HTTPException(status_code=404, detail="セッションが見つかりません。")
+    analyses = s.get("analyses")
+    if not analyses:
+        raise HTTPException(status_code=400, detail="分析結果がありません。先に分析を実行してください。")
+
+    df = s.get("df")
+    try:
+        buf = _build_evidence_excel(analyses, df)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"証跡Excel生成エラー: {e}")
+
+    filename = f"AIBI4_evidence_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/sessions/{sid}/export")
 def export_excel(sid: str):
     try:

@@ -43,6 +43,7 @@ const chatGraphsArea  = $("chat-graphs-area");
 const toastEl         = $("toast");
 const datasetSelect   = $("dataset-select");
 const exportBtn       = $("export-btn");
+const evidenceBtn     = $("evidence-btn");
 
 // ── ライトボックス ──
 const imgModal      = $("img-modal");
@@ -420,6 +421,7 @@ async function init() {
   clearChatBtn.addEventListener("click", onClearChat);
   voiceBtn.addEventListener("click", onVoiceClick);
   exportBtn.addEventListener("click", onExportExcel);
+  evidenceBtn.addEventListener("click", onEvidenceDownload);
   chatInput.addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onChatSend(); }
   });
@@ -463,6 +465,8 @@ async function onFetchClick() {
   fetchBtn.disabled = true;
   exportBtn.disabled = true;
   exportBtn.textContent = "📥 Excelエクスポート";
+  evidenceBtn.disabled = true;
+  evidenceBtn.textContent = "🔍 証跡ダウンロード";
   emptyState.style.display = "none";
   loadedState.style.display = "none";
   chatGraphsArea.innerHTML = "";
@@ -564,7 +568,9 @@ async function runBuiltinAnalysis() {
 
     exportBtn.disabled = false;
     exportBtn.title = "分析結果をExcelにエクスポート";
-    showToast("6項目の分析が完了しました。", "success");
+    evidenceBtn.disabled = false;
+    evidenceBtn.title = "グラフと集計データの整合性を確認できる証跡ファイルをダウンロード";
+    showToast("分析が完了しました。", "success");
   } catch (e) {
     analysisGrid.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--danger);">⚠️ 分析エラー: ${e.message}</div>`;
     showToast(`分析エラー: ${e.message}`, "error");
@@ -595,6 +601,33 @@ async function onExportExcel() {
   } finally {
     exportBtn.disabled = false;
     exportBtn.textContent = "📥 Excelエクスポート";
+  }
+}
+
+// ── 証跡ダウンロード ──
+async function onEvidenceDownload() {
+  if (!sessionId) return;
+  evidenceBtn.disabled = true;
+  evidenceBtn.textContent = "⏳ 生成中…";
+  try {
+    const resp = await fetch(`/api/sessions/${sessionId}/evidence`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || resp.statusText);
+    }
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `AIBI4_evidence_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("証跡ファイルをダウンロードしました。", "success");
+  } catch (e) {
+    showToast(`証跡エクスポートエラー: ${e.message}`, "error");
+  } finally {
+    evidenceBtn.disabled = false;
+    evidenceBtn.textContent = "🔍 証跡ダウンロード";
   }
 }
 
