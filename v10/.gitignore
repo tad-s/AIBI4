@@ -1,0 +1,16 @@
+# secrets
+.env
+backend/.env
+frontend/.env
+
+# python
+backend/.venv/
+**/__pycache__/
+*.pyc
+
+# node / build
+frontend/node_modules/
+frontend/dist/
+
+# misc
+backend/smoke_test.py
