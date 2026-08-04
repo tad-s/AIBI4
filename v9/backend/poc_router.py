@@ -38,6 +38,7 @@ async def run_poc(sid: str):
         "orders": int(df["order_id"].nunique()),
         "items": int(len(df)),
         "note": "全日14-23時（日曜22時まで）・単独客/ランチ定食/対象外メニュー/コース・放題を除外",
+        "source": "Supabase poc_ikebukuro_items（PoC専用テーブル）",
     }
     # ベース分析と同様にセッションへ保存（エビデンス/エクスポートとの整合）
     sess.update_session(sid, analyses=results, analysis_results=results, poc_meta=meta)

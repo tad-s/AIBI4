@@ -11,10 +11,18 @@ from __future__ import annotations
 import csv
 import os
 
+import httpx
 import pandas as pd
 
 from poc.classify import classify, set_master
 from poc.overrides import build_master
+
+# 本命: Supabase の PoC専用テーブル（要件どおり別テーブルを参照）。
+# anon キーで読める（RLS でSELECT許可済み）。列は基礎テーブルと同一。
+_SUPA_URL = os.getenv("SUPABASE_URL", "")
+_SUPA_KEY = os.getenv("SUPABASE_KEY", "")
+_TABLE = "poc_ikebukuro_items"
+_PAGE = 1000
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 _DATA = os.path.join(_ROOT, "data", "池袋東口店")
@@ -54,16 +62,41 @@ def _exclusion_names() -> set[str]:
 
 
 def available() -> bool:
-    return os.path.isdir(_DATA) or os.path.exists(_BUNDLE)
+    return bool(_SUPA_URL and _SUPA_KEY) or os.path.isdir(_DATA) or os.path.exists(_BUNDLE)
+
+
+def _coerce(df: pd.DataFrame) -> pd.DataFrame:
+    for col in ["party_size", "order_seq", "line_index", "quantity", "unit_price"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    if "party_size" in df.columns:
+        df["party_size"] = df["party_size"].fillna(0).astype(int)
+    return df
+
+
+def _load_from_supabase() -> pd.DataFrame:
+    """PoC専用テーブル poc_ikebukuro_items を anon キーで全件取得（1000行ページ）。"""
+    cols = ("visit_id,store_id,receipt_no,party_size,visit_start,order_id,order_seq,"
+            "line_index,ordered_at,item_name,category,fd,quantity,unit_price")
+    hdr = {"apikey": _SUPA_KEY, "Authorization": f"Bearer {_SUPA_KEY}"}
+    rows: list[dict] = []
+    off = 0
+    with httpx.Client(timeout=60) as c:
+        while True:
+            r = c.get(f"{_SUPA_URL}/rest/v1/{_TABLE}",
+                      headers={**hdr, "Range": f"{off}-{off + _PAGE - 1}"},
+                      params={"select": cols})
+            r.raise_for_status()
+            batch = r.json()
+            rows += batch
+            if len(batch) < _PAGE:
+                break
+            off += _PAGE
+    return _coerce(pd.DataFrame(rows))
 
 
 def _load_bundle() -> pd.DataFrame:
-    df = pd.read_csv(_BUNDLE, dtype=str, compression="gzip")
-    for col in ["party_size", "order_seq", "quantity", "unit_price"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    df["party_size"] = df["party_size"].fillna(0).astype(int)
-    return df
+    return _coerce(pd.read_csv(_BUNDLE, dtype=str, compression="gzip"))
 
 
 def build(force: bool = False) -> pd.DataFrame:
@@ -71,12 +104,22 @@ def build(force: bool = False) -> pd.DataFrame:
     if _CACHE is not None and not force:
         return _CACHE
 
+    # 本命: Supabase の PoC専用テーブルを参照（要件どおり別テーブル）
+    if _SUPA_URL and _SUPA_KEY:
+        try:
+            df = _load_from_supabase()
+            if len(df):
+                _CACHE = df
+                return _CACHE
+        except Exception:
+            pass  # 取得失敗時はローカル(生CSV/バンドル)へフォールバック
+
     # 生CSVが無い本番では同梱バンドルを読む
     if not os.path.isdir(_DATA):
         if os.path.exists(_BUNDLE):
             _CACHE = _load_bundle()
             return _CACHE
-        raise FileNotFoundError("PoC用データ（生CSVも同梱バンドルも）が見つかりません。")
+        raise FileNotFoundError("PoC用データ（Supabaseテーブル/生CSV/同梱バンドル）が見つかりません。")
 
     set_master(build_master(os.path.join(_ETC, "item_category_master.sql")))
 

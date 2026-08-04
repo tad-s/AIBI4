@@ -584,7 +584,7 @@ async function runPocAnalysisFlow() {
   const origLabel = "🍶 テング池袋東口店 PoC分析";
   try {
     pocBtn.disabled = true;
-    pocBtn.textContent = "⏳ PoC分析中…（約20秒）";
+    pocBtn.textContent = "⏳ PoC分析中…（初回は数十秒）";
     if (!sessionId) {
       const { session_id } = await api.createSession();
       sessionId = session_id;
