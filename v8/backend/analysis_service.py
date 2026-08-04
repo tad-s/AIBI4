@@ -156,12 +156,23 @@ def build_order_df(df: pd.DataFrame) -> pd.DataFrame | None:
         d["_is_heavy"] = _cats.isin(_food_cats).astype(int)
         d["_is_light"] = _cats.isin({"軽いつまみ", "サラダ"}).astype(int)
 
-    # receipt_no は同一店舗・同一日でも複数来店で重複するため来店時間との複合キーを使用
-    if key_col == "伝票番号" and "来店時間" in d.columns:
-        d["_basket_key"] = (
-            d["来店時間"].dt.strftime("%Y%m%d%H%M%S").fillna("?")
-            + "_" + d[key_col].astype(str)
-        )
+    # 来店の正準キー（店舗・伝票番号・来店/退店時刻）。ingestion で付与済みの「来店ID」を最優先。
+    # receipt_no 単独では店舗・日をまたいで使い回され一意にならない。
+    if "来店ID" in d.columns:
+        groupby_col = "来店ID"
+    elif key_col == "伝票番号" and "来店時間" in d.columns:
+        # 来店ID 未付与の df 用フォールバック（店舗・来店/退店時刻 + 伝票番号）
+        parts = []
+        if "店舗名" in d.columns:
+            parts.append(d["店舗名"].astype(str).fillna("?"))
+        parts.append(d["来店時間"].dt.strftime("%Y%m%d%H%M%S").fillna("?"))
+        if "退店時間" in d.columns:
+            parts.append(d["退店時間"].dt.strftime("%Y%m%d%H%M%S").fillna("?"))
+        parts.append(d[key_col].astype(str))
+        basket = parts[0]
+        for p in parts[1:]:
+            basket = basket + "_" + p
+        d["_basket_key"] = basket
         groupby_col = "_basket_key"
     else:
         groupby_col = key_col

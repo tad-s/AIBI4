@@ -61,9 +61,14 @@ def build_items_df(rows: list[dict]) -> pd.DataFrame:
         else:
             out[dst] = None
 
-    # 複合キー・カテゴリ
+    # 来店の正準複合キー = (店舗, 伝票番号, 来店時刻, 退店時刻)。
+    # receipt_no は店舗・日をまたいで激しく使い回されるため、単独や時刻のみでは
+    # 別来店を誤って併合してしまう（来店数・人数・客単価が過少化する）。
     out["visit_key"] = (
-        out["visit_time"].dt.strftime("%Y%m%d%H%M%S").fillna("?") + "_" + out["receipt_no"]
+        out["store_name"].astype("string").fillna("?") + "|"
+        + out["receipt_no"].astype("string").fillna("?") + "|"
+        + out["visit_time"].dt.strftime("%Y%m%d%H%M%S").fillna("?") + "|"
+        + out["leave_time"].dt.strftime("%Y%m%d%H%M%S").fillna("?")
     )
     out["category"] = out["item_name"].map(classify)
 

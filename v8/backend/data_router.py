@@ -292,6 +292,28 @@ async def fetch_data(req: FetchRequest):
     )
 
 
+def _build_visit_id(df: pd.DataFrame) -> pd.Series:
+    """来店の正準一意キー = (店舗, 伝票番号, 来店時刻, 退店時刻)。
+
+    receipt_no は店舗・日をまたいで激しく使い回される（実データで distinct 値が
+    来店総数のごく一部しかない）ため、単独では 1来店を一意に識別できない。
+    来店/退店時刻まで含めることで、実来店(visit_id)と同じ粒度になる。
+    来店組数・来店人数・客単価はすべてこのキーで重複除去して数えること。
+    """
+    n = len(df)
+
+    def part(col: str, is_dt: bool) -> pd.Series:
+        if col not in df.columns:
+            return pd.Series(["?"] * n, index=df.index)
+        s = df[col]
+        if is_dt:
+            return s.dt.strftime("%Y%m%d%H%M%S").fillna("?")
+        return s.astype("string").fillna("?")
+
+    return (part("store_name", False) + "|" + part("receipt_no", False)
+            + "|" + part("visit_time", True) + "|" + part("leave_time", True))
+
+
 def _build_df(rows: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     df["unit_price"] = pd.to_numeric(df.get("unit_price", 0), errors="coerce").fillna(0)
@@ -307,9 +329,10 @@ def _build_df(rows: list[dict]) -> pd.DataFrame:
                 pass
 
     df["_line_total"] = df["unit_price"] * df["quantity"]
-    # receipt_no は複数来店で重複するため visit_time との複合キーで集計
-    group_key = ["receipt_no", "visit_time"] if "visit_time" in df.columns else ["receipt_no"]
-    df["合計金額(税込)"] = df.groupby(group_key)["_line_total"].transform("sum")
+    # 来店の正準キー（店舗・伝票番号・来店/退店時刻）で伝票合計を算出。
+    # receipt_no 単独では店舗・日をまたいで使い回され一意にならないため使わない。
+    df["来店ID"] = _build_visit_id(df)
+    df["合計金額(税込)"] = df.groupby("来店ID")["_line_total"].transform("sum")
 
     df = df.rename(columns={
         "receipt_no":     "伝票番号",
