@@ -20,6 +20,7 @@ const storeSearch     = $("store-search");
 const storeList       = $("store-list");
 const storePreview    = $("store-preview");
 const fetchBtn        = $("fetch-btn");
+const pocBtn          = $("poc-btn");
 const sbStatus        = $("sb-status");
 const emptyState      = $("empty-state");
 const fetchState      = $("fetch-state");
@@ -577,6 +578,67 @@ async function runBuiltinAnalysis() {
     showToast(`分析エラー: ${e.message}`, "error");
   }
 }
+
+// ── テング池袋東口店 PoC分析（ベース分析を差し替え表示）──
+async function runPocAnalysisFlow() {
+  const origLabel = "🍶 テング池袋東口店 PoC分析";
+  try {
+    pocBtn.disabled = true;
+    pocBtn.textContent = "⏳ PoC分析中…（約20秒）";
+    if (!sessionId) {
+      const { session_id } = await api.createSession();
+      sessionId = session_id;
+    }
+    // ロード済み状態＋分析タブへ切替
+    emptyState.style.display = "none";
+    fetchState.style.display = "none";
+    loadedState.style.display = "flex";
+    loadedState.style.flexDirection = "column";
+    sbStatus.classList.remove("hidden");
+    const analysisTab = document.querySelector('.tab[data-tab="analysis"]');
+    if (analysisTab) analysisTab.click();
+
+    kpiBar.innerHTML = "";
+    analysisGrid.innerHTML = "";
+    showSkeletons(5);
+    analysisGrid.appendChild(skeletonGrid);
+    showToast("テング池袋PoC分析を実行中…（生データからorder粒度で集計）", "success");
+
+    const { analyses, meta } = await api.runPocAnalysis(sessionId);
+
+    analysisGrid.innerHTML = "";
+    const banner = document.createElement("div");
+    banner.style.cssText =
+      "grid-column:1/-1;padding:14px 18px;border-radius:12px;margin-bottom:4px;" +
+      "background:linear-gradient(135deg,rgba(124,92,255,.10),rgba(91,155,213,.10));" +
+      "border:1px solid rgba(124,92,255,.35);";
+    banner.innerHTML =
+      `<div style="font-weight:800;font-size:15px;">🍶 ${meta.store} レコメンドPoC</div>
+       <div style="font-size:12px;color:var(--text-muted);margin-top:5px;line-height:1.6;">
+         対象期間 <b>${meta.period}</b>／来店 <b>${meta.visits.toLocaleString()}</b>・
+         オーダー <b>${meta.orders.toLocaleString()}</b>・明細 <b>${meta.items.toLocaleString()}</b><br>${meta.note}</div>`;
+    analysisGrid.appendChild(banner);
+
+    analyses.forEach(a => {
+      const card = a.image_b64
+        ? buildGraphCard(a.title, a.image_b64, a.insight, a.table, a.insights, a.advice)
+        : buildErrorCard(a.title, a.insight || "生成エラー");
+      analysisGrid.appendChild(card);
+    });
+
+    if (exportBtn) { exportBtn.disabled = false; exportBtn.title = "分析結果をExcelにエクスポート"; }
+    if (evidenceBtn) evidenceBtn.disabled = false;
+    showToast("テング池袋PoC分析が完了しました。", "success");
+  } catch (e) {
+    showToast(`PoC分析エラー: ${e.message}`, "error");
+    analysisGrid.innerHTML =
+      `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--danger);">⚠️ PoC分析エラー: ${e.message}</div>`;
+  } finally {
+    pocBtn.disabled = false;
+    pocBtn.textContent = origLabel;
+  }
+}
+if (pocBtn) pocBtn.addEventListener("click", runPocAnalysisFlow);
 
 // ── Excel エクスポート ──
 

@@ -92,6 +92,12 @@ export async function runAnalysis(sid) {
   return r.json();
 }
 
+export async function runPocAnalysis(sid) {
+  const r = await fetch(`${BASE}/api/poc/analysis/${sid}`, { method: "POST" });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
 export async function chat(sid, message, newChat = false) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000); // 2分タイムアウト
