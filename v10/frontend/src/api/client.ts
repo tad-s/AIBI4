@@ -1,5 +1,5 @@
 import type {
-  AnalysesResponse, AskResponse, Filters, QueryResult, QuerySpec, SessionMeta, StoreOption,
+  AnalysesResponse, AskResponse, Filters, QueryResult, QuerySpec, SavedView, SessionMeta, StoreOption,
 } from "../types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -48,7 +48,44 @@ export const api = {
 
   analyses: (sid: string, global_filters: Filters) =>
     jpost<AnalysesResponse>(`/api/sessions/${sid}/analyses`, { global_filters }),
+
+  // 保存済み分析
+  listSaved: (dataset: string) =>
+    jget<{ items: SavedView[] }>(`/api/saved?dataset=${encodeURIComponent(dataset)}`),
+  saveView: (name: string, spec: QuerySpec, dataset: string) =>
+    jpost<SavedView>("/api/saved", { name, spec, dataset }),
+  deleteSaved: (id: string) =>
+    fetch(`${BASE}/api/saved/${id}`, { method: "DELETE" }).then((r) => {
+      if (!r.ok) throw new Error("削除に失敗しました");
+    }),
 };
+
+/** 分析結果を Excel でダウンロードする。 */
+export async function exportXlsx(
+  sid: string, spec: QuerySpec, global_filters: Filters, confidence?: number | null,
+): Promise<void> {
+  const r = await fetch(`${BASE}/api/sessions/${sid}/export`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ spec, global_filters, confidence }),
+  });
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail ?? detail; } catch { /* ignore */ }
+    throw new Error(detail);
+  }
+  const blob = await r.blob();
+  // Content-Disposition の filename* からファイル名を復元（無ければ既定名）
+  let fname = "分析結果.xlsx";
+  const cd = r.headers.get("Content-Disposition") || "";
+  const m = cd.match(/filename\*=UTF-8''([^;]+)/i);
+  if (m) { try { fname = decodeURIComponent(m[1]); } catch { /* ignore */ } }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(url);
+}
 
 /** SSE 相当のデータ投入（fetch stream を手動パース）。 */
 export async function loadData(

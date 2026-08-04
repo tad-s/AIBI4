@@ -14,3 +14,6 @@ frontend/dist/
 
 # misc
 backend/smoke_test.py
+
+# ユーザーデータ（保存済み分析）
+backend/data/saved_views.json

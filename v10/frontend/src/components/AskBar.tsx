@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../state/store";
+import { ConfidenceBadge } from "./Evidence";
 
 const SUGGESTIONS = [
   "店舗別の売上ランキングを見せて",
@@ -56,6 +57,9 @@ export function AskBar() {
                 </span>
               )}
               <span>{c.content}</span>
+              {c.role === "assistant" && c.action === "query" && c.confidence != null && (
+                <div className="ask-conf"><ConfidenceBadge c={c.confidence} /></div>
+              )}
             </div>
           ))}
           {asking && <div className="ask-msg ask-assistant"><span className="dots">分析中…</span></div>}

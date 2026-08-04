@@ -3,6 +3,7 @@ import type { ChartType, QueryResult } from "../types";
 import { buildOption } from "../charts/buildOption";
 import { fmtValue } from "../charts/format";
 import { EChart } from "./EChart";
+import { Evidence } from "./Evidence";
 import { DIM_TO_FILTER, useApp } from "../state/store";
 
 const TYPE_OPTS: { id: ChartType; icon: string; label: string }[] = [
@@ -15,8 +16,28 @@ export function ChartTile({
   res, ai = false, onRemove,
 }: { res: QueryResult; ai?: boolean; onRemove?: () => void }) {
   const [showData, setShowData] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [ctype, setCtype] = useState<ChartType>(res.spec.chart_type);
   const applyCrossFilter = useApp((s) => s.applyCrossFilter);
+  const exportResult = useApp((s) => s.exportResult);
+  const saveView = useApp((s) => s.saveView);
+
+  const onExport = async () => {
+    setBusy(true);
+    try { await exportResult(res); }
+    catch (e: any) { alert(`Excel出力に失敗しました: ${e?.message ?? e}`); }
+    finally { setBusy(false); }
+  };
+
+  const onSave = async () => {
+    const name = window.prompt("保存する分析の名前", res.title);
+    if (!name) return;
+    setBusy(true);
+    try { await saveView(res, name); }
+    catch (e: any) { alert(`保存に失敗しました: ${e?.message ?? e}`); }
+    finally { setBusy(false); }
+  };
   const view = useMemo(
     () => ({ ...res, spec: { ...res.spec, chart_type: ctype } }),
     [res, ctype],
@@ -53,9 +74,15 @@ export function ChartTile({
             </div>
           )}
           <button className="tile-btn" title="元データ" onClick={() => setShowData((v) => !v)}>⊞</button>
+          <button className={`tile-btn ${showEvidence ? "on" : ""}`} title="根拠（使用データ・集計式・フィルタ・SQL）"
+            onClick={() => setShowEvidence((v) => !v)}>🔍</button>
+          <button className="tile-btn" title="この分析を保存" onClick={onSave} disabled={busy}>★</button>
+          <button className="tile-btn" title="Excelで出力" onClick={onExport} disabled={busy}>⬇</button>
           {onRemove && <button className="tile-btn" title="削除" onClick={onRemove}>✕</button>}
         </div>
       </div>
+
+      {showEvidence && <Evidence res={res} />}
 
       {empty ? (
         <div className="tile-empty">該当データがありません</div>

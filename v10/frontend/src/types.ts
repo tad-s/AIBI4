@@ -35,13 +35,14 @@ export interface ResultRow {
 
 export interface QueryResult {
   spec: QuerySpec;
-  metric: { id: string; label: string; unit: string; fmt: string };
+  metric: { id: string; label: string; unit: string; fmt: string; view?: string; agg?: string };
   dimensions: { id: string; label: string; kind: string }[];
   rows: ResultRow[];
   sql: string;
   title: string;
   spark?: number[];
   delta?: number;
+  confidence?: number | null;
 }
 
 export interface SessionMeta {
@@ -58,10 +59,19 @@ export interface StoreOption {
   store_name: string;
 }
 
+export interface SavedView {
+  id: string;
+  name: string;
+  dataset: string;
+  spec: QuerySpec;
+  created_at: number;
+}
+
 export interface AskResponse {
   action: "query" | "clarify" | "impossible";
   message: string;
   result: QueryResult | null;
+  confidence?: number | null;
 }
 
 export interface AnalysisChart {

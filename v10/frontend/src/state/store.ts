@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { api, loadData } from "../api/client";
-import { emptyFilters, type AnalysisResult, type Filters, type QueryResult, type SessionMeta, type StoreOption } from "../types";
+import { api, exportXlsx, loadData } from "../api/client";
+import { emptyFilters, type AnalysisResult, type Filters, type QueryResult, type QuerySpec, type SavedView, type SessionMeta, type StoreOption } from "../types";
 
 type LoadPhase = "idle" | "loading" | "processing" | "loaded" | "error";
 type View = "dashboard" | "base" | "flow" | "explore";
@@ -10,6 +10,7 @@ interface ChatMsg {
   content: string;
   action?: "query" | "clarify" | "impossible";
   result?: QueryResult | null;
+  confidence?: number | null;
 }
 
 interface AppState {
@@ -48,6 +49,9 @@ interface AppState {
   chat: ChatMsg[];
   asking: boolean;
 
+  // saved views
+  savedViews: SavedView[];
+
   // actions
   init: () => Promise<void>;
   setDataset: (d: string) => Promise<void>;
@@ -62,6 +66,11 @@ interface AppState {
   removeAiTile: (idx: number) => void;
   applyCrossFilter: (dimId: string, raw: any) => Promise<void>;
   clearFilters: () => Promise<void>;
+  exportResult: (res: QueryResult) => Promise<void>;
+  loadSaved: () => Promise<void>;
+  saveView: (res: QueryResult, name: string) => Promise<void>;
+  runSaved: (view: SavedView) => Promise<void>;
+  deleteSaved: (id: string) => Promise<void>;
 }
 
 // 軸ID → グローバルフィルタのフィールド
@@ -104,6 +113,8 @@ export const useApp = create<AppState>((set, get) => ({
 
   chat: [],
   asking: false,
+
+  savedViews: [],
 
   async init() {
     const [ds, cat] = await Promise.all([api.datasets(), api.catalog()]);
@@ -170,6 +181,7 @@ export const useApp = create<AppState>((set, get) => ({
         analysesLoaded: false,
       });
       await get().refreshDashboard();
+      await get().loadSaved();
     } catch (e: any) {
       set({ loadPhase: "error", loadError: e?.message ?? String(e) });
     }
@@ -225,6 +237,7 @@ export const useApp = create<AppState>((set, get) => ({
         content: res.message || (res.action === "query" ? "分析結果を表示しました。" : ""),
         action: res.action,
         result: res.result,
+        confidence: res.confidence ?? res.result?.confidence ?? null,
       };
       set({ chat: [...get().chat, assistantMsg] });
       if (res.action === "query" && res.result) {
@@ -267,5 +280,38 @@ export const useApp = create<AppState>((set, get) => ({
     set({ globalFilters: emptyFilters() });
     await get().refreshDashboard();
     if (get().analysesLoaded) await get().refreshAnalyses();
+  },
+
+  async exportResult(res: QueryResult) {
+    const { sessionId, globalFilters } = get();
+    if (!sessionId) return;
+    await exportXlsx(sessionId, res.spec, globalFilters, res.confidence ?? null);
+  },
+
+  async loadSaved() {
+    try {
+      const { items } = await api.listSaved(get().dataset);
+      set({ savedViews: items });
+    } catch {
+      set({ savedViews: [] });
+    }
+  },
+
+  async saveView(res: QueryResult, name: string) {
+    const item = await api.saveView(name, res.spec, get().dataset);
+    set({ savedViews: [item, ...get().savedViews] });
+  },
+
+  async runSaved(view: SavedView) {
+    const { sessionId, globalFilters } = get();
+    if (!sessionId) return;
+    const spec: QuerySpec = { ...view.spec, title: view.name };
+    const res = await api.query(sessionId, spec, globalFilters);
+    set({ aiTiles: [res, ...get().aiTiles], view: "dashboard" });
+  },
+
+  async deleteSaved(id: string) {
+    await api.deleteSaved(id);
+    set({ savedViews: get().savedViews.filter((v) => v.id !== id) });
   },
 }));

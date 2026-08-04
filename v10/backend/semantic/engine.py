@@ -122,7 +122,8 @@ def run(session: Session, spec: QuerySpec) -> dict:
 
     return {
         "spec": spec.model_dump(),
-        "metric": {"id": metric.id, "label": metric.label, "unit": metric.unit, "fmt": metric.fmt},
+        "metric": {"id": metric.id, "label": metric.label, "unit": metric.unit,
+                   "fmt": metric.fmt, "view": metric.view, "agg": metric.sql},
         "dimensions": [{"id": d.id, "label": d.label, "kind": d.kind} for d in dims],
         "rows": rows,
         "sql": sql,

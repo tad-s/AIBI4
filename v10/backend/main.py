@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.config import settings
-from routers import analyses_router, ask, data, meta, query
+from routers import analyses_router, ask, data, export, meta, query, saved
 
 app = FastAPI(title="AIBI4 v10 API", version="10.0.0")
 
@@ -23,6 +23,8 @@ app.include_router(data.router)
 app.include_router(query.router)
 app.include_router(ask.router)
 app.include_router(analyses_router.router)
+app.include_router(export.router)
+app.include_router(saved.router)
 
 
 @app.get("/api/health")

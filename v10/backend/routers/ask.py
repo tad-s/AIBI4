@@ -39,4 +39,7 @@ def ask(sid: str, req: AskReq):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    return {"action": "query", "message": gen.get("message", ""), "result": result}
+    # AI 回答の根拠として確信度を結果に埋め込む（フロントのエビデンス表示用）
+    result["confidence"] = gen.get("confidence")
+    return {"action": "query", "message": gen.get("message", ""),
+            "result": result, "confidence": gen.get("confidence")}

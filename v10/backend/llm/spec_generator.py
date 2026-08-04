@@ -25,12 +25,15 @@ def _get_client() -> OpenAI:
 
 
 def _system_prompt(meta: dict) -> str:
+    def _syn(obj) -> str:
+        return f'（同義語: {"、".join(obj.synonyms)}）' if obj.synonyms else ""
+
     metrics_desc = "\n".join(
-        f'  - "{m.id}": {m.label}（単位:{m.unit or "—"}, base:{m.view}） {m.description}'
+        f'  - "{m.id}": {m.label}（単位:{m.unit or "—"}, base:{m.view}） {m.description}{_syn(m)}'
         for m in METRICS.values()
     )
     dims_desc = "\n".join(
-        f'  - "{d.id}": {d.label}（利用可: {"/".join(d.views)}）'
+        f'  - "{d.id}": {d.label}（利用可: {"/".join(d.views)}）{_syn(d)}'
         for d in DIMENSIONS.values()
     )
     stores = meta.get("stores", [])
@@ -63,6 +66,7 @@ def _system_prompt(meta: dict) -> str:
 {{
   "action": "query" | "clarify" | "impossible",
   "message": "ユーザーへの一言（queryなら分析の要約、clarify/impossibleなら質問や説明）",
+  "confidence": 0.0〜1.0,   // 依頼を指標・軸・フィルタに正しく写像できた確信度（queryのとき必須。曖昧・推測が多いほど低く）
   "spec": {{
     "metric": "<metric id>",
     "dimensions": ["<dim id>", ...],
@@ -123,4 +127,12 @@ def generate(user_text: str, meta: dict, history: list[dict] | None = None) -> d
                 "message": "分析の指定が不完全でした。指標や軸をもう少し具体的に教えてください。",
                 "spec": None, "error": str(e)}
 
-    return {"action": "query", "message": message, "spec": spec.model_dump()}
+    # 確信度（0〜1 に丸める。欠損時は None）
+    confidence = data.get("confidence")
+    try:
+        confidence = max(0.0, min(1.0, float(confidence))) if confidence is not None else None
+    except (TypeError, ValueError):
+        confidence = None
+
+    return {"action": "query", "message": message,
+            "spec": spec.model_dump(), "confidence": confidence}

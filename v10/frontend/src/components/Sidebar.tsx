@@ -7,6 +7,7 @@ export function Sidebar() {
     availableMonths, selectedMonths, toggleMonth,
     availableStores, selectedStoreIds, toggleStore,
     fetchData, loadPhase,
+    savedViews, runSaved, deleteSaved,
   } = useApp();
   const [storeSearch, setStoreSearch] = useState("");
 
@@ -71,6 +72,26 @@ export function Sidebar() {
       <button className="fetch-btn" onClick={fetchData} disabled={loading}>
         {loading ? "取得中…" : "データを取得する"}
       </button>
+
+      {loadPhase === "loaded" && (
+        <div className="sb-section sb-saved">
+          <div className="sb-label">保存済み分析<span className="sb-hint">クリックで表示</span></div>
+          {savedViews.length === 0 ? (
+            <span className="sb-muted">タイルの ★ で保存できます</span>
+          ) : (
+            <div className="saved-list">
+              {savedViews.map((v) => (
+                <div key={v.id} className="saved-item">
+                  <button className="saved-run" title="この分析を表示" onClick={() => runSaved(v)}>
+                    ★ {v.name}
+                  </button>
+                  <button className="saved-del" title="削除" onClick={() => deleteSaved(v.id)}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

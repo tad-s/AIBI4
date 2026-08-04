@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from core.config import settings
 from core.duck import store
 from ingest import categories
+from ingest.demo import build_demo_items_df
 from ingest.supabase_fetch import fetch_category_master, fetch_sales
 from ingest.transform import build_items_df
 
@@ -34,7 +35,8 @@ def create_session(req: CreateSessionReq):
 
 @router.post("/load")
 async def load(req: LoadReq):
-    if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
+    is_demo = req.dataset == "demo"
+    if not is_demo and (not settings.SUPABASE_URL or not settings.SUPABASE_KEY):
         raise HTTPException(status_code=500, detail="SUPABASE_URL / SUPABASE_KEY が未設定です。")
     session = store.get(req.session_id)
     if session is None:
@@ -49,6 +51,22 @@ async def load(req: LoadReq):
             queue.put_nowait,
             {"type": "progress", "done": done, "total": total, "rows": rows, "pct": pct},
         )
+
+    async def demo_worker():
+        try:
+            await queue.put({"type": "progress", "done": 1, "total": 1, "rows": 0, "pct": 60})
+            items_df = await loop.run_in_executor(
+                None, build_demo_items_df, req.months, req.store_ids
+            )
+            await queue.put({"type": "progress", "done": 1, "total": 1,
+                             "rows": int(len(items_df)), "pct": 90})
+            await queue.put({"type": "processing", "message": "DuckDB に投入中…"})
+            await loop.run_in_executor(None, session.load, items_df)
+            await queue.put({"type": "done", "meta": session.meta})
+        except Exception as e:
+            await queue.put({"type": "error", "message": str(e)})
+        finally:
+            await queue.put(None)
 
     async def worker():
         try:
@@ -70,8 +88,10 @@ async def load(req: LoadReq):
         finally:
             await queue.put(None)
 
+    run_worker = demo_worker if is_demo else worker
+
     async def event_stream():
-        task = asyncio.create_task(worker())
+        task = asyncio.create_task(run_worker())
         try:
             while True:
                 ev = await queue.get()
