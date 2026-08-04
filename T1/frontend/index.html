@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T1 池袋東口店 レコメンドPoC</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">T1 PoC Tool</p>
+      <h1>テング酒場 池袋東口店<br>レコメンド候補分析</h1>
+      <p class="lead">2026年3〜5月、14時以降、2名以上、除外メニュー適用済みのPoC専用分析です。</p>
+    </div>
+    <div class="actions">
+      <button id="build-btn" class="btn">基礎テーブル作成</button>
+      <button id="analyze-btn" class="btn primary">分析実行</button>
+      <button id="export-btn" class="btn">Excel出力</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>分析条件</h2>
+      <div class="conditions">
+        <div><strong>店舗</strong><span>テング酒場 池袋東口店</span></div>
+        <div><strong>期間</strong><span>2026年3月〜5月</span></div>
+        <div><strong>時間</strong><span>全日14:00〜23:00、日曜のみ22:00まで</span></div>
+        <div><strong>来店人数</strong><span>2名以上</span></div>
+        <div><strong>除外</strong><span>定食、分析対象外CSV、お好みコース、飲み放題</span></div>
+        <div><strong>高注文卓</strong><span>除外後数量15品以上</span></div>
+      </div>
+    </section>
+
+    <section id="summary" class="summary-grid"></section>
+    <section id="funnel" class="panel hidden"></section>
+
+    <section class="tabs">
+      <button class="tab active" data-target="a1">1. TOP商品</button>
+      <button class="tab" data-target="a2">2. 同時注文</button>
+      <button class="tab" data-target="a3">3. 連続注文</button>
+      <button class="tab" data-target="a4">4. 推薦候補</button>
+    </section>
+
+    <section id="a1" class="tab-panel active">
+      <div class="grid3">
+        <div class="panel"><h2>全体TOP10</h2><div id="a1-overall"></div></div>
+        <div class="panel"><h2>ドリンクTOP10</h2><div id="a1-drink"></div></div>
+        <div class="panel"><h2>フードTOP10</h2><div id="a1-food"></div></div>
+      </div>
+    </section>
+
+    <section id="a2" class="tab-panel">
+      <div class="panel"><h2>同時注文ペア TOP10</h2><p class="note">同一order_id内、ドリンクのみオーダー除外、ドリンク×ドリンク除外。</p><div id="a2-table"></div></div>
+    </section>
+
+    <section id="a3" class="tab-panel">
+      <div class="panel"><h2>連続注文ペア TOP10</h2><p class="note">隣接する別order_id間の A→B。有向ペア。10卓以上のみ。</p><div id="a3-table"></div></div>
+    </section>
+
+    <section id="a4" class="tab-panel">
+      <div class="grid2">
+        <div class="panel"><h2>フード→フード Top5</h2><div id="a4-ff"></div></div>
+        <div class="panel"><h2>ドリンク→ドリンク Top5</h2><div id="a4-dd"></div></div>
+        <div class="panel"><h2>フード↔ドリンク Top5</h2><div id="a4-fd"></div></div>
+        <div class="panel"><h2>カテゴリ Top5</h2><div id="a4-cat"></div></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/js/app.js"></script>
+</body>
+</html>
