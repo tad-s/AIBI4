@@ -21,8 +21,28 @@ from poc.overrides import build_master
 # anon キーで読める（RLS でSELECT許可済み）。列は基礎テーブルと同一。
 _SUPA_URL = os.getenv("SUPABASE_URL", "")
 _SUPA_KEY = os.getenv("SUPABASE_KEY", "")
+_SUPA_SVC = os.getenv("SUPABASE_SERVICE_KEY", "")   # カテゴリ編集(書込)用
 _TABLE = "poc_ikebukuro_items"
 _PAGE = 1000
+
+
+def set_category(item_name: str, category: str) -> None:
+    """PoC専用テーブルの item_name のカテゴリを更新（原本は不変）。fd も派生更新。
+
+    書込には service key が必要（anon は RLS で SELECT のみ）。更新後はキャッシュ破棄。
+    """
+    if not (_SUPA_URL and _SUPA_SVC):
+        raise RuntimeError("SUPABASE_SERVICE_KEY が未設定のためカテゴリ編集できません。")
+    fd = "ドリンク" if category == "ドリンク" else "フード"
+    hdr = {"apikey": _SUPA_SVC, "Authorization": f"Bearer {_SUPA_SVC}",
+           "Content-Type": "application/json", "Prefer": "return=minimal"}
+    with httpx.Client(timeout=60) as c:
+        r = c.patch(f"{_SUPA_URL}/rest/v1/{_TABLE}", headers=hdr,
+                    params={"item_name": f"eq.{item_name}"},
+                    json={"category": category, "fd": fd})
+        r.raise_for_status()
+    global _CACHE
+    _CACHE = None   # 次回 build() で最新を再取得
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 _DATA = os.path.join(_ROOT, "data", "池袋東口店")

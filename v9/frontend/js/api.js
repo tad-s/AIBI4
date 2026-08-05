@@ -98,6 +98,26 @@ export async function runPocAnalysis(sid) {
   return r.json();
 }
 
+export async function getPocCategories() {
+  const r = await fetch(`${BASE}/api/poc/categories`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function overridePocCategory(item_name, category) {
+  const r = await fetch(`${BASE}/api/poc/categories/override`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ item_name, category }),
+  });
+  if (!r.ok) {
+    let d = r.statusText;
+    try { d = (await r.json()).detail ?? d; } catch { /* ignore */ }
+    throw new Error(d);
+  }
+  return r.json();
+}
+
 export async function chat(sid, message, newChat = false) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000); // 2分タイムアウト

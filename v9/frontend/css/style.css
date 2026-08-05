@@ -573,6 +573,36 @@ body { background: var(--bg); color: var(--text); display: flex; overflow: hidde
   max-width: 100%;
   letter-spacing: .3px;
 }
+
+/* ── PoC カテゴリ内訳/編集モーダル ── */
+.cat-modal-content {
+  position: relative; z-index: 1;
+  width: min(92vw, 760px); max-height: 86vh;
+  background: var(--surface, #fff); color: var(--text, #1c2333);
+  border-radius: 14px; box-shadow: 0 16px 60px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: modal-in .18s ease;
+}
+.cat-modal-head { padding: 16px 20px 10px; border-bottom: 1px solid var(--border, #e5e9f2); }
+.cat-modal-head h3 { margin: 0 0 4px; font-size: 15px; }
+.cat-modal-head p { margin: 0; font-size: 11.5px; color: var(--text-muted, #8a93a6); line-height: 1.5; }
+.cat-modal-body { padding: 10px 14px 16px; overflow-y: auto; }
+.cat-section { border: 1px solid var(--border, #e5e9f2); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+.cat-head {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: var(--surface-2, #f0f3f9); border: none; cursor: pointer; text-align: left; font-size: 13px;
+}
+.cat-head:hover { background: var(--primary-soft, #eaf1fd); }
+.cat-caret { color: var(--text-muted, #8a93a6); font-size: 11px; width: 12px; }
+.cat-name { font-weight: 700; }
+.cat-fd { margin-left: 8px; font-size: 10px; font-weight: 600; color: #fff; background: var(--primary, #4f7bd8); border-radius: 999px; padding: 1px 7px; }
+.cat-stat { margin-left: auto; font-size: 11px; color: var(--text-muted, #8a93a6); font-variant-numeric: tabular-nums; }
+.cat-items { background: var(--surface, #fff); max-height: 320px; overflow-y: auto; }
+.cat-item-row { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--surface-2, #f0f3f9); font-size: 12.5px; }
+.cat-item-name { flex: 1; }
+.cat-item-qty { color: var(--text-muted, #8a93a6); font-size: 10.5px; margin-left: 6px; }
+.cat-select { border: 1px solid var(--border-strong, #d4dae6); border-radius: 7px; padding: 4px 8px; font-size: 12px; background: #fff; color: var(--text, #1c2333); cursor: pointer; }
+.cat-select:hover { border-color: var(--primary, #4f7bd8); }
 .graph-insight {
   padding: 10px 14px;
   font-size: 11.5px;

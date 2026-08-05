@@ -163,6 +163,9 @@
       <button id="evidence-btn" class="btn btn-export" disabled title="チャット履歴・分析結果・整合性確認ログをJSONでダウンロード">
         🧾 エビデンスログ
       </button>
+      <button id="poc-cat-btn" class="btn btn-export" style="display:none;" title="PoCカテゴリの内訳確認・編集">
+        🏷 カテゴリ内訳/編集
+      </button>
     </div>
 
     <!-- KPI カード -->
@@ -206,6 +209,19 @@
     <button id="img-modal-close" class="img-modal-close" title="閉じる（Escキーでも閉じます）">✕</button>
     <img id="img-modal-img" src="" alt="">
     <div id="img-modal-title" class="img-modal-title"></div>
+  </div>
+</div>
+
+<!-- カテゴリ内訳/編集モーダル -->
+<div id="cat-modal" class="img-modal">
+  <div class="img-modal-backdrop"></div>
+  <div class="cat-modal-content">
+    <button id="cat-modal-close" class="img-modal-close" title="閉じる（Escキーでも閉じます）">✕</button>
+    <div class="cat-modal-head">
+      <h3>🏷 PoCカテゴリ内訳／編集</h3>
+      <p>カテゴリ名をクリックで所属商品を展開。各商品のカテゴリを変更すると PoC専用テーブルが更新され、再集計されます（原本は不変）。</p>
+    </div>
+    <div id="cat-modal-body" class="cat-modal-body"></div>
   </div>
 </div>
 

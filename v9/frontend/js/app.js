@@ -46,6 +46,11 @@ const toastEl         = $("toast");
 const datasetSelect   = $("dataset-select");
 const exportBtn       = $("export-btn");
 const evidenceBtn     = $("evidence-btn");
+const pocCatBtn       = $("poc-cat-btn");
+const catModal        = $("cat-modal");
+const catModalBody    = $("cat-modal-body");
+let pocMode           = false;   // PoC分析を表示中か（エビデンスDL/カテゴリ編集の分岐用）
+const POC_CATEGORIES  = ["ドリンク","揚げ物","串","海鮮","鍋","サラダ","ヘビー","軽いつまみ","締め","デザート","その他"];
 
 // ── ライトボックス ──
 const imgModal      = $("img-modal");
@@ -557,6 +562,8 @@ async function onFetchClick() {
 
 // ── 12項目分析 ──
 async function runBuiltinAnalysis() {
+  pocMode = false;
+  if (pocCatBtn) pocCatBtn.style.display = "none";
   try {
     const { analyses } = await api.runAnalysis(sessionId);
 
@@ -628,6 +635,8 @@ async function runPocAnalysisFlow() {
 
     if (exportBtn) { exportBtn.disabled = false; exportBtn.title = "分析結果をExcelにエクスポート"; }
     if (evidenceBtn) evidenceBtn.disabled = false;
+    pocMode = true;
+    if (pocCatBtn) pocCatBtn.style.display = "";   // カテゴリ内訳/編集ボタンを表示
     showToast("テング池袋PoC分析が完了しました。", "success");
   } catch (e) {
     showToast(`PoC分析エラー: ${e.message}`, "error");
@@ -640,6 +649,84 @@ async function runPocAnalysisFlow() {
 }
 if (pocBtn) pocBtn.addEventListener("click", runPocAnalysisFlow);
 
+// ── PoC カテゴリ内訳/編集モーダル ──
+function closeCatModal() { catModal.classList.remove("open"); }
+
+async function loadCategoryBreakdown() {
+  catModalBody.innerHTML = '<div style="padding:24px;color:var(--text-muted);">読み込み中…</div>';
+  catModal.classList.add("open");
+  try {
+    const data = await api.getPocCategories();
+    renderCategoryBreakdown(data.categories || []);
+  } catch (e) {
+    catModalBody.innerHTML = `<div style="padding:24px;color:var(--danger);">読み込みエラー: ${e.message}</div>`;
+  }
+}
+
+function renderCategoryBreakdown(categories) {
+  catModalBody.innerHTML = "";
+  categories.forEach(cat => {
+    const sec = document.createElement("div");
+    sec.className = "cat-section";
+    const head = document.createElement("button");
+    head.className = "cat-head";
+    head.innerHTML =
+      `<span class="cat-caret">▸</span>` +
+      `<span class="cat-name">${cat.category}<span class="cat-fd">${cat.fd}</span></span>` +
+      `<span class="cat-stat">${cat.item_count}品 / 数量${Math.round(cat.total_qty).toLocaleString()} / 来店${cat.total_visits}</span>`;
+    const list = document.createElement("div");
+    list.className = "cat-items";
+    list.style.display = "none";
+    cat.items.forEach(it => {
+      const row = document.createElement("div");
+      row.className = "cat-item-row";
+      const info = document.createElement("span");
+      info.className = "cat-item-name";
+      info.innerHTML = `${it.item_name} <span class="cat-item-qty">数量${Math.round(it.qty).toLocaleString()}・来店${it.visits}</span>`;
+      const sel = document.createElement("select");
+      sel.className = "cat-select";
+      POC_CATEGORIES.forEach(c => {
+        const o = document.createElement("option");
+        o.value = c; o.textContent = c;
+        if (c === cat.category) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener("change", () => onCategoryChange(it.item_name, sel.value));
+      row.appendChild(info);
+      row.appendChild(sel);
+      list.appendChild(row);
+    });
+    head.addEventListener("click", () => {
+      const open = list.style.display !== "none";
+      list.style.display = open ? "none" : "block";
+      head.querySelector(".cat-caret").textContent = open ? "▸" : "▾";
+    });
+    sec.appendChild(head);
+    sec.appendChild(list);
+    catModalBody.appendChild(sec);
+  });
+}
+
+async function onCategoryChange(itemName, category) {
+  if (!confirm(`「${itemName}」のカテゴリを「${category}」に変更し、PoC分析を再集計します。よろしいですか？\n（PoC専用テーブルのみ更新・原本は不変）`)) {
+    loadCategoryBreakdown();   // 変更を取り消してUIを戻す
+    return;
+  }
+  try {
+    await api.overridePocCategory(itemName, category);
+    showToast(`「${itemName}」を「${category}」に変更しました。再集計します。`, "success");
+    closeCatModal();
+    await runPocAnalysisFlow();   // テーブル更新を反映して再集計
+  } catch (e) {
+    showToast(`カテゴリ変更エラー: ${e.message}`, "error");
+  }
+}
+
+if (pocCatBtn) pocCatBtn.addEventListener("click", loadCategoryBreakdown);
+$("cat-modal-close").addEventListener("click", closeCatModal);
+catModal.querySelector(".img-modal-backdrop").addEventListener("click", closeCatModal);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeCatModal(); });
+
 // ── Excel エクスポート ──
 
 async function onExportEvidence() {
@@ -649,13 +736,19 @@ async function onExportEvidence() {
     evidenceBtn.textContent = "⏳ 生成中…";
   }
   try {
-    const res = await fetch(`/api/sessions/${sessionId}/evidence-log`);
+    // PoC表示中は「原本CSV→変換→集計」の来歴テキストを、それ以外は従来のJSONを出す
+    const poc = pocMode;
+    const res = await fetch(poc
+      ? `/api/poc/evidence/${sessionId}`
+      : `/api/sessions/${sessionId}/evidence-log`);
     if (!res.ok) throw new Error(await res.text());
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
+    const ymd = new Date().toISOString().slice(0,10).replaceAll("-","");
     a.href = url;
-    a.download = `AIBI4_V9_evidence_${new Date().toISOString().slice(0,10).replaceAll("-","")}.json`;
+    a.download = poc ? `テング池袋PoC_エビデンス_${ymd}.txt`
+                     : `AIBI4_V9_evidence_${ymd}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
