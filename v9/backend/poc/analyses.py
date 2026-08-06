@@ -23,7 +23,9 @@ else:
 plt.rcParams["axes.unicode_minus"] = False
 
 MIN_TABLES = 10
+MIN3 = 5   # 3連鎖の出現閾値（卓数）。まず5卓以上で集計（有効でなければ調整）
 _C_DRINK, _C_FOOD, _C_SEQ, _C_CAT = "#5b9bd5", "#f39c12", "#e74c3c", "#7c5cff"
+_C_SEQ3 = "#c0392b"
 
 
 def _b64(fig) -> str:
@@ -250,9 +252,125 @@ def analysis4_category(df):
     }
 
 
+# ══════════ 3品版（別指標）: 直積＋卓数、5卓以上でまず集計 ══════════
+def _consecutive3(d, col):
+    """隣接3オーダーの A→B→C（有向・直積）。1オーダーに複数カテゴリがあれば全組合せ。"""
+    fd = dict(zip(d[col], d["fd"]))
+    cnt: Counter = Counter()
+    tbl: defaultdict = defaultdict(set)
+    og = (d.sort_values(["visit_id", "order_seq"])
+            .groupby(["visit_id", "order_seq"])[col]
+            .agg(lambda s: list(dict.fromkeys(s))))
+    for vid, sub in og.groupby(level=0):
+        vals = sub.droplevel(0).sort_index().tolist()
+        for i in range(len(vals) - 2):
+            for a in vals[i]:
+                for b in vals[i + 1]:
+                    if a == b:
+                        continue
+                    for c in vals[i + 2]:
+                        if b == c:
+                            continue
+                        cnt[(a, b, c)] += 1
+                        tbl[(a, b, c)].add(vid)
+    return cnt, tbl, fd
+
+
+def _seq3_frame(d, col):
+    cnt, tbl, fd = _consecutive3(d, col)
+    rows = [{"連続3品": f"{a} → {b} → {c}", "組合せ": f"{fd[a]}→{fd[b]}→{fd[c]}",
+             "出現回数": v, "卓数": len(tbl[(a, b, c)])}
+            for (a, b, c), v in cnt.items() if len(tbl[(a, b, c)]) >= MIN3]
+    if not rows:
+        return pd.DataFrame(columns=["連続3品", "組合せ", "出現回数", "卓数"])
+    return pd.DataFrame(rows).sort_values(["卓数", "出現回数"], ascending=False).reset_index(drop=True)
+
+
+def _seq3_card(top, card_title, chart_title, color, level_note, advice):
+    fig, ax = plt.subplots(figsize=(12, 5))
+    if len(top):
+        _hbar(ax, top["連続3品"].head(12).tolist(), top["卓数"].head(12).tolist(), color, chart_title, "卓数")
+    else:
+        ax.text(0.5, 0.5, f"{MIN3}卓以上の3連鎖なし", ha="center", va="center")
+        ax.axis("off"); ax.set_title(chart_title)
+    fig.tight_layout()
+    head = top.iloc[0]["連続3品"] if len(top) else "該当なし"
+    return {
+        "title": card_title,
+        "image_b64": _b64(fig),
+        "insight": (f"最も多い3連続注文は **{head}**（{int(top.iloc[0]['卓数'])}卓）。"
+                    if len(top) else f"{MIN3}卓以上の3連鎖は見つかりませんでした（閾値調整の余地）。"),
+        "insights": [
+            "隣接する3オーダー(前→中→次)の A→B→C。有向・直積・卓数で順位付け。",
+            f"{level_note}　閾値: {MIN3}卓以上。",
+        ],
+        "advice": advice,
+        "table": top.head(12).to_dict("records"),
+    }
+
+
+def analysis5_seq3_item(df):
+    top = _seq3_frame(_party2(df), "item_name")
+    return _seq3_card(
+        top, "PoC⑤ 連続注文3品（商品）", "PoC⑤ 連続注文3品（商品 A→B→C・5卓以上）", _C_SEQ3,
+        "母集団: 2組以上（#3連続ペアと同じ）。商品名粒度。",
+        ["A→Bの後の3品目Cを『次の一手』として提示", "3連鎖上位をコース/セット設計に反映"])
+
+
+def analysis6_seq3_category(df):
+    top = _seq3_frame(_visits_ge15(_party2(df)), "category")
+    return _seq3_card(
+        top, "PoC⑥ 連続注文3品（カテゴリ）", "PoC⑥ 連続注文3品（カテゴリ A→B→C・5卓以上）", _C_CAT,
+        "母集団: 2組以上かつ15品以上（#4カテゴリと同じ）。カテゴリ粒度。",
+        ["ドリンク→○→○ の定番フローを推奨導線に", "3カテゴリの流れをコース構成に反映"])
+
+
+def analysis7_coorder3_item(df):
+    d = _party2(df)
+    fdmap = dict(zip(d["item_name"], d["fd"]))
+    og = d.groupby("order_id").agg(items=("item_name", lambda s: list(dict.fromkeys(s))),
+                                   visit_id=("visit_id", "first"))
+    cnt: Counter = Counter()
+    tbl: defaultdict = defaultdict(set)
+    for row in og.itertuples():
+        names = row.items
+        if len(names) < 3 or not any(fdmap[n] == "フード" for n in names):
+            continue
+        for trio in combinations(sorted(set(names)), 3):
+            if all(fdmap[x] == "ドリンク" for x in trio):
+                continue
+            cnt[trio] += 1
+            tbl[trio].add(row.visit_id)
+    rows = [{"商品3組": f"{a} × {b} × {c}", "共起オーダー数": v, "卓数": len(tbl[(a, b, c)])}
+            for (a, b, c), v in cnt.items()]
+    top = (pd.DataFrame(rows).sort_values(["共起オーダー数", "卓数"], ascending=False).reset_index(drop=True)
+           if rows else pd.DataFrame(columns=["商品3組", "共起オーダー数", "卓数"]))
+    fig, ax = plt.subplots(figsize=(12, 5))
+    if len(top):
+        _hbar(ax, top["商品3組"].head(10).tolist(), top["共起オーダー数"].head(10).tolist(),
+              _C_FOOD, "PoC⑦ 同時注文3品（同一オーダー内・商品）", "共起オーダー数")
+    else:
+        ax.text(0.5, 0.5, "該当なし", ha="center", va="center"); ax.axis("off"); ax.set_title("PoC⑦ 同時注文3品")
+    fig.tight_layout()
+    head = top.iloc[0]["商品3組"] if len(top) else "該当なし"
+    return {
+        "title": "PoC⑦ 同時注文3品（商品）",
+        "image_b64": _b64(fig),
+        "insight": (f"最も多い同時3品は **{head}**（{int(top.iloc[0]['共起オーダー数'])}オーダー）。"
+                    if len(top) else "該当する同時3品はありませんでした。"),
+        "insights": [
+            "同一order_id内の3品組み合わせ（#2同時ペアの3品版）。",
+            "ドリンクのみのオーダー・3品すべてドリンクは除外（1品以上フード）。母集団: 2組以上。",
+        ],
+        "advice": ["同時3品の上位を3点セット/盛合せ候補に", "卓上POP・レコメンドの3点提案に活用"],
+        "table": top.head(12).to_dict("records"),
+    }
+
+
 def run_poc_analyses(df: pd.DataFrame) -> list[dict]:
     out = []
-    for fn in [analysis1, analysis2, analysis3, analysis4, analysis4_category]:
+    for fn in [analysis1, analysis2, analysis3, analysis4, analysis4_category,
+               analysis5_seq3_item, analysis6_seq3_category, analysis7_coorder3_item]:
         try:
             out.append(fn(df))
         except Exception as e:  # noqa: BLE001
