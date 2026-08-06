@@ -85,6 +85,21 @@ def available() -> bool:
     return bool(_SUPA_URL and _SUPA_KEY) or os.path.isdir(_DATA) or os.path.exists(_BUNDLE)
 
 
+# 商品名に含まれると除外するキーワード（宴会系は基本除外）
+_EXCLUDE_ITEM_KW = ["宴"]
+
+
+def _drop_excluded(df: pd.DataFrame) -> pd.DataFrame:
+    """宴会系など、商品名に除外キーワードを含む行を落とす（全データ源に適用）。"""
+    if "item_name" not in df.columns or not len(df):
+        return df.reset_index(drop=True)
+    s = df["item_name"].astype(str)
+    mask = pd.Series(False, index=df.index)
+    for kw in _EXCLUDE_ITEM_KW:
+        mask |= s.str.contains(kw, na=False, regex=False)
+    return df[~mask].reset_index(drop=True)
+
+
 def _coerce(df: pd.DataFrame) -> pd.DataFrame:
     for col in ["party_size", "order_seq", "line_index", "quantity", "unit_price"]:
         if col in df.columns:
@@ -129,7 +144,7 @@ def build(force: bool = False) -> pd.DataFrame:
         try:
             df = _load_from_supabase()
             if len(df):
-                _CACHE = df
+                _CACHE = _drop_excluded(df)   # 宴会系を除外
                 return _CACHE
         except Exception:
             pass  # 取得失敗時はローカル(生CSV/バンドル)へフォールバック
@@ -137,7 +152,7 @@ def build(force: bool = False) -> pd.DataFrame:
     # 生CSVが無い本番では同梱バンドルを読む
     if not os.path.isdir(_DATA):
         if os.path.exists(_BUNDLE):
-            _CACHE = _load_bundle()
+            _CACHE = _drop_excluded(_load_bundle())   # 宴会系を除外
             return _CACHE
         raise FileNotFoundError("PoC用データ（Supabaseテーブル/生CSV/同梱バンドル）が見つかりません。")
 
@@ -175,6 +190,7 @@ def build(force: bool = False) -> pd.DataFrame:
         "order_id", "order_seq", "line_index", "ordered_at",
         "item_name", "category", "fd", "quantity", "unit_price",
     ]].reset_index(drop=True)
+    out = _drop_excluded(out)   # 宴会系(「宴」)を除外
 
     # 本番同梱用の軽量バンドルを更新（除外適用済みスナップショット）
     try:

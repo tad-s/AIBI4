@@ -76,8 +76,8 @@ def _meta(df) -> dict:
         "visits": int(df["visit_id"].nunique()),
         "orders": int(df["order_id"].nunique()),
         "items": int(len(df)),
-        "note": "全日14-23時（日曜22時まで）・単独客/ランチ定食/対象外メニュー/コース・放題を除外",
-        "source": "Supabase poc_ikebukuro_items（PoC専用テーブル）",
+        "note": "全日14-23時（日曜22時まで）・単独客/ランチ定食/対象外メニュー/コース・放題/宴会系(「宴」)を除外",
+        "source": "Supabase poc_ikebukuro_items（PoC専用テーブル・宴会系は集計時除外）",
     }
 
 
