@@ -139,12 +139,13 @@ def build(force: bool = False) -> pd.DataFrame:
     if _CACHE is not None and not force:
         return _CACHE
 
-    # 本命: Supabase の PoC専用テーブルを参照（要件どおり別テーブル）
+    # 本命: Supabase の PoC専用テーブルを参照（要件どおり別テーブル）。
+    # 宴会系はテーブルから物理削除済み・分類マスタでドリンク補正済みのため、読込時フィルタは行わない。
     if _SUPA_URL and _SUPA_KEY:
         try:
             df = _load_from_supabase()
             if len(df):
-                _CACHE = _drop_excluded(df)   # 宴会系を除外
+                _CACHE = df
                 return _CACHE
         except Exception:
             pass  # 取得失敗時はローカル(生CSV/バンドル)へフォールバック
@@ -152,7 +153,7 @@ def build(force: bool = False) -> pd.DataFrame:
     # 生CSVが無い本番では同梱バンドルを読む
     if not os.path.isdir(_DATA):
         if os.path.exists(_BUNDLE):
-            _CACHE = _drop_excluded(_load_bundle())   # 宴会系を除外
+            _CACHE = _load_bundle()
             return _CACHE
         raise FileNotFoundError("PoC用データ（Supabaseテーブル/生CSV/同梱バンドル）が見つかりません。")
 
