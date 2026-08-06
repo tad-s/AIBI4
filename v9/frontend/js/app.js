@@ -51,6 +51,7 @@ const catModal        = $("cat-modal");
 const catModalBody    = $("cat-modal-body");
 const drillModal      = $("drill-modal");
 const drillModalBody  = $("drill-modal-body");
+const analysisTabBtn  = document.querySelector('.tab[data-tab="analysis"]');
 let pocMode           = false;   // PoC分析を表示中か（エビデンスDL/カテゴリ編集の分岐用）
 const POC_CATEGORIES  = ["ドリンク","揚げ物","串","海鮮","鍋","サラダ","ヘビー","軽いつまみ","締め","デザート","その他"];
 
@@ -665,7 +666,8 @@ async function runBuiltinAnalysis() {
     exportBtn.disabled = false;
     if (evidenceBtn) evidenceBtn.disabled = false;
     exportBtn.title = "分析結果をExcelにエクスポート";
-    showToast("12項目の分析が完了しました。", "success");
+    if (analysisTabBtn) analysisTabBtn.textContent = `🔬 ベース分析（${analyses.length}項目）`;
+    showToast(`${analyses.length}項目の分析が完了しました。`, "success");
   } catch (e) {
     analysisGrid.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--danger);">⚠️ 分析エラー: ${e.message}</div>`;
     showToast(`分析エラー: ${e.message}`, "error");
@@ -722,6 +724,7 @@ async function runPocAnalysisFlow() {
     if (exportBtn) { exportBtn.disabled = false; exportBtn.title = "分析結果をExcelにエクスポート"; }
     if (evidenceBtn) evidenceBtn.disabled = false;
     pocMode = true;
+    if (analysisTabBtn) analysisTabBtn.textContent = `🍶 テング池袋PoC分析（${analyses.length}項目）`;
     if (pocCatBtn) pocCatBtn.style.display = "";   // カテゴリ内訳/編集ボタンを表示
     // PoCデータをもとにチャット分析できるよう入力を有効化
     chatInput.disabled = false;
