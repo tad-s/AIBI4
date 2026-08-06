@@ -49,6 +49,8 @@ const evidenceBtn     = $("evidence-btn");
 const pocCatBtn       = $("poc-cat-btn");
 const catModal        = $("cat-modal");
 const catModalBody    = $("cat-modal-body");
+const drillModal      = $("drill-modal");
+const drillModalBody  = $("drill-modal-body");
 let pocMode           = false;   // PoC分析を表示中か（エビデンスDL/カテゴリ編集の分岐用）
 const POC_CATEGORIES  = ["ドリンク","揚げ物","串","海鮮","鍋","サラダ","ヘビー","軽いつまみ","締め","デザート","その他"];
 
@@ -211,7 +213,7 @@ function showSkeletons(n = 6) {
 }
 
 // ── グラフカード ──
-function buildGraphCard(title, imageB64, insight, table, insights, advice) {
+function buildGraphCard(title, imageB64, insight, table, insights, advice, drill) {
   const card = document.createElement("div");
   card.className = "graph-card";
 
@@ -291,15 +293,18 @@ function buildGraphCard(title, imageB64, insight, table, insights, advice) {
     card.appendChild(ins);
   }
 
-  // テーブル（折りたたみ）
+  // テーブル（折りたたみ）。ドリル可能なら既定で開く。
   if (table && table.length > 0) {
     const det = document.createElement("details");
+    if (drill) det.open = true;
     const sum = document.createElement("summary");
-    sum.textContent = `📋 集計データ（${table.length}行）`;
+    sum.textContent = drill
+      ? `📋 集計データ（${table.length}行・各行の「${drill.label || "内訳"}」で詳細）`
+      : `📋 集計データ（${table.length}行）`;
     det.appendChild(sum);
     const wrap = document.createElement("div");
     wrap.className = "table-wrap";
-    wrap.appendChild(buildTable(table));
+    wrap.appendChild(buildTable(table, drill));
     det.appendChild(wrap);
     card.appendChild(det);
   }
@@ -307,7 +312,7 @@ function buildGraphCard(title, imageB64, insight, table, insights, advice) {
   return card;
 }
 
-function buildTable(rows) {
+function buildTable(rows, drill) {
   const t = document.createElement("table");
   t.className = "data-table";
   if (!rows.length) return t;
@@ -315,6 +320,7 @@ function buildTable(rows) {
   const thead = t.createTHead();
   const tr = thead.insertRow();
   keys.forEach(k => { const th = document.createElement("th"); th.textContent = k; tr.appendChild(th); });
+  if (drill) { const th = document.createElement("th"); th.textContent = "操作"; tr.appendChild(th); }
   const tbody = t.createTBody();
   rows.forEach(row => {
     const tr2 = tbody.insertRow();
@@ -327,8 +333,88 @@ function buildTable(rows) {
         td.textContent = v ?? "";
       }
     });
+    if (drill) {
+      const td = tr2.insertCell();
+      const btn = document.createElement("button");
+      btn.className = "drill-btn";
+      btn.textContent = drill.label || "内訳";
+      const key = row[drill.col];
+      btn.addEventListener("click", () => openDrill(drill.type, key));
+      td.appendChild(btn);
+    }
   });
   return t;
+}
+
+// ── ドリルダウン内訳モーダル ──
+function closeDrill() { drillModal.classList.remove("open"); }
+
+async function openDrill(type, value) {
+  drillModal.classList.add("open");
+  $("drill-modal-title").textContent = "内訳";
+  $("drill-modal-sub").textContent = "";
+  drillModalBody.innerHTML = '<div style="padding:24px;color:var(--text-muted);">読み込み中…</div>';
+  try {
+    if (type === "item_hours") {
+      const d = await api.drillPocItemHours(value);
+      $("drill-modal-title").textContent = `${value} の時間帯別`;
+      $("drill-modal-sub").textContent = `PoC①母集団（2組以上・15品以上）での注文時刻別 数量。合計 ${d.total_qty.toLocaleString()} 点。`;
+      renderDrillHours(d.hours);
+    } else if (type === "category_pair") {
+      const [a, b] = value.split("→").map(s => s.trim());
+      const d = await api.drillPocPair(a, b);
+      $("drill-modal-title").textContent = `${value} の商品ペア内訳`;
+      $("drill-modal-sub").textContent = `このカテゴリペアを構成する具体的な商品ペア（上位${d.rows.length}）。`;
+      renderDrillRows(d.rows);
+    } else if (type === "category_seq3") {
+      const [a, b, c] = value.split("→").map(s => s.trim());
+      const d = await api.drillPocSeq3(a, b, c);
+      $("drill-modal-title").textContent = `${value} の商品3連鎖内訳`;
+      $("drill-modal-sub").textContent = `このカテゴリ3連鎖を構成する具体的な商品3連鎖（上位${d.rows.length}）。`;
+      renderDrillRows(d.rows);
+    }
+  } catch (e) {
+    drillModalBody.innerHTML = `<div style="padding:24px;color:var(--danger);">読み込みエラー: ${e.message}</div>`;
+  }
+}
+
+function renderDrillRows(rows) {
+  drillModalBody.innerHTML = "";
+  if (!rows || !rows.length) {
+    drillModalBody.innerHTML = '<div style="padding:24px;color:var(--text-muted);">該当する内訳がありません。</div>';
+    return;
+  }
+  const wrap = document.createElement("div");
+  wrap.className = "table-wrap";
+  wrap.appendChild(buildTable(rows));
+  drillModalBody.appendChild(wrap);
+}
+
+function renderDrillHours(hours) {
+  drillModalBody.innerHTML = "";
+  if (!hours || !hours.length) {
+    drillModalBody.innerHTML = '<div style="padding:24px;color:var(--text-muted);">時間帯データがありません。</div>';
+    return;
+  }
+  const max = Math.max(...hours.map(h => h.数量));
+  const box = document.createElement("div");
+  box.className = "hours-chart";
+  hours.forEach(h => {
+    const row = document.createElement("div");
+    row.className = "hours-row";
+    row.innerHTML =
+      `<span class="hours-label">${h.時間帯}</span>` +
+      `<span class="hours-bar-track"><span class="hours-bar" style="width:${max ? (h.数量 / max * 100) : 0}%"></span></span>` +
+      `<span class="hours-val">${h.数量.toLocaleString()}点 <span class="hours-sub">/ ${h.卓数}卓</span></span>`;
+    box.appendChild(row);
+  });
+  drillModalBody.appendChild(box);
+}
+
+if (drillModal) {
+  $("drill-modal-close").addEventListener("click", closeDrill);
+  drillModal.querySelector(".img-modal-backdrop").addEventListener("click", closeDrill);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrill(); });
 }
 
 function buildErrorCard(title, errorMsg) {
@@ -571,7 +657,7 @@ async function runBuiltinAnalysis() {
     analysisGrid.innerHTML = "";
     analyses.forEach(a => {
       const card = a.image_b64
-        ? buildGraphCard(a.title, a.image_b64, a.insight, a.table, a.insights, a.advice)
+        ? buildGraphCard(a.title, a.image_b64, a.insight, a.table, a.insights, a.advice, a.drill)
         : buildErrorCard(a.title, a.insight || "グラフ生成エラー");
       analysisGrid.appendChild(card);
     });
@@ -628,7 +714,7 @@ async function runPocAnalysisFlow() {
 
     analyses.forEach(a => {
       const card = a.image_b64
-        ? buildGraphCard(a.title, a.image_b64, a.insight, a.table, a.insights, a.advice)
+        ? buildGraphCard(a.title, a.image_b64, a.insight, a.table, a.insights, a.advice, a.drill)
         : buildErrorCard(a.title, a.insight || "生成エラー");
       analysisGrid.appendChild(card);
     });

@@ -603,6 +603,18 @@ body { background: var(--bg); color: var(--text); display: flex; overflow: hidde
 .cat-item-qty { color: var(--text-muted, #8a93a6); font-size: 10.5px; margin-left: 6px; }
 .cat-select { border: 1px solid var(--border-strong, #d4dae6); border-radius: 7px; padding: 4px 8px; font-size: 12px; background: #fff; color: var(--text, #1c2333); cursor: pointer; }
 .cat-select:hover { border-color: var(--primary, #4f7bd8); }
+
+/* ── ドリルダウン内訳 ── */
+.drill-btn { border: 1px solid var(--primary, #4f7bd8); color: var(--primary, #4f7bd8); background: transparent;
+  border-radius: 999px; padding: 3px 12px; font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: .12s; }
+.drill-btn:hover { background: var(--primary, #4f7bd8); color: #fff; }
+.hours-chart { display: flex; flex-direction: column; gap: 6px; padding: 4px 2px; }
+.hours-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.hours-label { width: 44px; flex-shrink: 0; color: var(--text-sub, #4a5163); font-variant-numeric: tabular-nums; text-align: right; }
+.hours-bar-track { flex: 1; height: 16px; background: var(--surface-2, #f0f3f9); border-radius: 5px; overflow: hidden; }
+.hours-bar { display: block; height: 100%; background: linear-gradient(90deg, var(--primary, #4f7bd8), var(--accent, #7c5cff)); border-radius: 5px; }
+.hours-val { width: 128px; flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.hours-sub { color: var(--text-muted, #8a93a6); font-size: 10.5px; }
 .graph-insight {
   padding: 10px 14px;
   font-size: 11.5px;

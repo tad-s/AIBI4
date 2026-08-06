@@ -104,6 +104,24 @@ export async function getPocCategories() {
   return r.json();
 }
 
+export async function drillPocPair(a, b) {
+  const r = await fetch(`${BASE}/api/poc/drill/pair?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function drillPocSeq3(a, b, c) {
+  const r = await fetch(`${BASE}/api/poc/drill/seq3?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}&c=${encodeURIComponent(c)}`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function drillPocItemHours(item) {
+  const r = await fetch(`${BASE}/api/poc/drill/item-hours?item=${encodeURIComponent(item)}`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
 export async function overridePocCategory(item_name, category) {
   const r = await fetch(`${BASE}/api/poc/categories/override`, {
     method: "POST",

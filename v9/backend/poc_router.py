@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 import session as sess
 from llm_service import build_data_summary
-from poc import base_table, lineage
+from poc import base_table, drill, lineage
 from poc.analyses import run_poc_analyses
 
 router = APIRouter()
@@ -139,6 +139,29 @@ class OverrideReq(BaseModel):
 
 _VALID_CATS = {"ドリンク", "揚げ物", "串", "海鮮", "鍋", "サラダ",
                "ヘビー", "軽いつまみ", "締め", "デザート", "その他"}
+
+
+@router.get("/poc/drill/pair")
+async def poc_drill_pair(a: str, b: str):
+    """カテゴリペア a→b を構成する商品ペアの内訳。"""
+    df = await run_in_threadpool(base_table.build)
+    rows = await run_in_threadpool(drill.item_pairs_for_category_pair, df, a, b)
+    return {"category_pair": f"{a} → {b}", "rows": rows}
+
+
+@router.get("/poc/drill/seq3")
+async def poc_drill_seq3(a: str, b: str, c: str):
+    """カテゴリ3連鎖 a→b→c を構成する商品3連鎖の内訳。"""
+    df = await run_in_threadpool(base_table.build)
+    rows = await run_in_threadpool(drill.item_triples_for_category_seq, df, a, b, c)
+    return {"category_seq": f"{a} → {b} → {c}", "rows": rows}
+
+
+@router.get("/poc/drill/item-hours")
+async def poc_drill_item_hours(item: str):
+    """PoC①の商品の時間帯別 数量。"""
+    df = await run_in_threadpool(base_table.build)
+    return await run_in_threadpool(drill.item_hours, df, item)
 
 
 @router.post("/poc/categories/override")

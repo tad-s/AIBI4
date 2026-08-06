@@ -103,6 +103,7 @@ def analysis1(df):
             "高頻度フードを初期メニュー導線の目立つ位置へ",
         ],
         "table": overall[["item_name", "fd", "category", "数量", "卓数"]].to_dict("records"),
+        "drill": {"type": "item_hours", "col": "item_name", "label": "時間帯別"},
     }
 
 
@@ -249,6 +250,7 @@ def analysis4_category(df):
         ],
         "advice": ["継続の強いカテゴリを次オーダーの推奨カテゴリに設定", "例: ドリンク→揚げ物／ヘビー の導線強化"],
         "table": top.to_dict("records"),
+        "drill": {"type": "category_pair", "col": "カテゴリ連続", "label": "内訳を見る"},
     }
 
 
@@ -286,7 +288,7 @@ def _seq3_frame(d, col):
     return pd.DataFrame(rows).sort_values(["卓数", "出現回数"], ascending=False).reset_index(drop=True)
 
 
-def _seq3_card(top, card_title, chart_title, color, level_note, advice):
+def _seq3_card(top, card_title, chart_title, color, level_note, advice, drill=None):
     fig, ax = plt.subplots(figsize=(12, 5))
     if len(top):
         _hbar(ax, top["連続3品"].head(12).tolist(), top["卓数"].head(12).tolist(), color, chart_title, "卓数")
@@ -306,6 +308,7 @@ def _seq3_card(top, card_title, chart_title, color, level_note, advice):
         ],
         "advice": advice,
         "table": top.head(12).to_dict("records"),
+        **({"drill": drill} if drill else {}),
     }
 
 
@@ -322,7 +325,8 @@ def analysis6_seq3_category(df):
     return _seq3_card(
         top, "PoC⑥ 連続注文3品（カテゴリ）", "PoC⑥ 連続注文3品（カテゴリ A→B→C・5卓以上）", _C_CAT,
         "母集団: 2組以上かつ15品以上（#4カテゴリと同じ）。カテゴリ粒度。",
-        ["ドリンク→○→○ の定番フローを推奨導線に", "3カテゴリの流れをコース構成に反映"])
+        ["ドリンク→○→○ の定番フローを推奨導線に", "3カテゴリの流れをコース構成に反映"],
+        drill={"type": "category_seq3", "col": "連続3品", "label": "内訳を見る"})
 
 
 def analysis7_coorder3_item(df):
