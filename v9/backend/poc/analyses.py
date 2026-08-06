@@ -371,13 +371,35 @@ def analysis7_coorder3_item(df):
     }
 
 
+# 圧倒的に頻出する上位3商品（POS略称）。除外版指標で外す。
+TOP3_EXCLUDE = ["サイコロステ", "フライドポテト", "肉豆腐"]
+
+
+def _run_one(fn, df: pd.DataFrame) -> dict:
+    try:
+        return fn(df)
+    except Exception as e:  # noqa: BLE001
+        return {"title": f"{fn.__name__} エラー", "image_b64": "",
+                "insight": f"計算エラー: {e}", "insights": [], "advice": [], "table": None}
+
+
+def _excluded_variant(card: dict) -> dict:
+    card = dict(card)
+    card["title"] = card["title"] + "【上位3品除く】"
+    card.pop("drill", None)   # 除外版はドリルダウン無効
+    note = "※ サイコロステ・フライドポテト・肉豆腐 を除外した集計"
+    card["insights"] = [note] + list(card.get("insights") or [])
+    if card.get("insight"):
+        card["insight"] = card["insight"] + "（上位3品除く）"
+    return card
+
+
 def run_poc_analyses(df: pd.DataFrame) -> list[dict]:
+    fns = [analysis1, analysis2, analysis3, analysis4, analysis4_category,
+           analysis5_seq3_item, analysis6_seq3_category, analysis7_coorder3_item]
+    df_ex = df[~df["item_name"].isin(TOP3_EXCLUDE)].reset_index(drop=True)
     out = []
-    for fn in [analysis1, analysis2, analysis3, analysis4, analysis4_category,
-               analysis5_seq3_item, analysis6_seq3_category, analysis7_coorder3_item]:
-        try:
-            out.append(fn(df))
-        except Exception as e:  # noqa: BLE001
-            out.append({"title": f"{fn.__name__} エラー", "image_b64": "",
-                        "insight": f"計算エラー: {e}", "insights": [], "advice": [], "table": None})
+    for fn in fns:
+        out.append(_run_one(fn, df))                       # 通常版
+        out.append(_excluded_variant(_run_one(fn, df_ex)))  # 上位3品除外版
     return out
