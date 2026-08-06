@@ -85,8 +85,8 @@ def available() -> bool:
     return bool(_SUPA_URL and _SUPA_KEY) or os.path.isdir(_DATA) or os.path.exists(_BUNDLE)
 
 
-# 商品名に含まれると除外するキーワード（宴会系は基本除外）
-_EXCLUDE_ITEM_KW = ["宴"]
+# 商品名に含まれると除外するキーワード（宴会系「宴」・飲み放題「ＦＤ」）
+_EXCLUDE_ITEM_KW = ["宴", "ＦＤ"]
 
 
 def _drop_excluded(df: pd.DataFrame) -> pd.DataFrame:
