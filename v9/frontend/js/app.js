@@ -637,7 +637,13 @@ async function runPocAnalysisFlow() {
     if (evidenceBtn) evidenceBtn.disabled = false;
     pocMode = true;
     if (pocCatBtn) pocCatBtn.style.display = "";   // カテゴリ内訳/編集ボタンを表示
-    showToast("テング池袋PoC分析が完了しました。", "success");
+    // PoCデータをもとにチャット分析できるよう入力を有効化
+    chatInput.disabled = false;
+    chatSendBtn.disabled = false;
+    chatNewSendBtn.disabled = false;
+    if (typeof VoiceRecorder !== "undefined") voiceBtn.disabled = !VoiceRecorder.isSupported();
+    chatInput.placeholder = "PoCデータで分析…（例: カテゴリ別の販売数量、連続注文の傾向）";
+    showToast("テング池袋PoC分析が完了しました。チャットでもPoCデータを分析できます。", "success");
   } catch (e) {
     showToast(`PoC分析エラー: ${e.message}`, "error");
     analysisGrid.innerHTML =
