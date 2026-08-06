@@ -9,10 +9,10 @@ import pandas as pd
 
 # 原本 → 基礎テーブルの来歴（固定パイプライン）
 _PIPELINE = [
-    ("原本CSV", "order_items(order_item_id,order_id,visit_id,store_id,order_seq,line_index,"
-                "ordered_at,item_name,line_type,quantity,unit_price) / "
-                "visits(visit_id,store_id,receipt_no,party_size,visit_start,visit_end) / "
-                "orders(order_id,visit_id,order_seq,order_time)"),
+    ("原本テーブル", "order_items(order_item_id,order_id,visit_id,store_id,order_seq,line_index,"
+                "ordered_at,item_name,line_type,quantity,unit_price) と "
+                "visits(visit_id,store_id,receipt_no,party_size,visit_start,visit_end) の2つ。"
+                "※order_id/order_seq/ordered_at は order_items に含まれるため orders テーブルは不使用。"),
     ("結合", "order_items を visits に (visit_id,store_id) で内部結合し、来店属性"
              "(receipt_no,party_size,visit_start)を付与。1来店ID=visit_id(源泉UUID)。"),
     ("除外1: 明細種別", "line_type='M'(実注文品)のみ採用。'S'(大盛り等の無料オプション)は除外。"),

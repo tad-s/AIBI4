@@ -1,0 +1,257 @@
+<title>テング池袋PoC分析 — ロジック＆データフロー</title>
+<style>
+  :root {
+    --bg: #f6f7fb; --surface: #ffffff; --surface-2: #eef1f7;
+    --border: #dfe3ec; --border-strong:#cdd3e0;
+    --ink: #1b2233; --ink-2: #4f5871; --muted: #868ea3;
+    --accent: #5b6ee1; --accent-soft: #eaedfc;
+    --poc: #cf7a1f; --poc-soft: #fbf0dc;
+    --raw: #6b7280; --raw-soft:#eceef2;
+    --good: #2e9e6b; --bad: #c9576b;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Courier New", monospace;
+    --sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    --radius: 12px; --shadow: 0 1px 2px rgba(20,30,60,.05), 0 8px 24px rgba(20,30,60,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f121b; --surface:#161a25; --surface-2:#1d2330;
+      --border:#28303f; --border-strong:#333c4e;
+      --ink:#e7eaf3; --ink-2:#aab2c5; --muted:#727a8d;
+      --accent:#8f9df3; --accent-soft:#1e243a;
+      --poc:#e0a45a; --poc-soft:#2a2211;
+      --raw:#8a91a1; --raw-soft:#1c222e;
+      --good:#4cc189; --bad:#e0788b;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#f6f7fb; --surface:#ffffff; --surface-2:#eef1f7; --border:#dfe3ec; --border-strong:#cdd3e0;
+    --ink:#1b2233; --ink-2:#4f5871; --muted:#868ea3; --accent:#5b6ee1; --accent-soft:#eaedfc;
+    --poc:#cf7a1f; --poc-soft:#fbf0dc; --raw:#6b7280; --raw-soft:#eceef2; --good:#2e9e6b; --bad:#c9576b;
+    --shadow:0 1px 2px rgba(20,30,60,.05), 0 8px 24px rgba(20,30,60,.06);
+  }
+  :root[data-theme="dark"] {
+    --bg:#0f121b; --surface:#161a25; --surface-2:#1d2330; --border:#28303f; --border-strong:#333c4e;
+    --ink:#e7eaf3; --ink-2:#aab2c5; --muted:#727a8d; --accent:#8f9df3; --accent-soft:#1e243a;
+    --poc:#e0a45a; --poc-soft:#2a2211; --raw:#8a91a1; --raw-soft:#1c222e; --good:#4cc189; --bad:#e0788b;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+         line-height:1.7; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width: 900px; margin:0 auto; padding: 48px 24px 72px; }
+
+  header.top { margin-bottom: 36px; }
+  .eyebrow { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--poc);
+             font-weight:700; margin:0 0 10px; }
+  h1 { font-size: clamp(26px, 4vw, 36px); line-height:1.25; margin:0 0 12px; text-wrap:balance;
+       letter-spacing:-.01em; }
+  .lede { color:var(--ink-2); font-size:15.5px; margin:0; max-width:62ch; }
+  .metarow { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+  .chip { font-size:12px; font-weight:600; padding:4px 11px; border-radius:999px;
+          background:var(--surface-2); color:var(--ink-2); border:1px solid var(--border); }
+  .chip b { color:var(--ink); font-variant-numeric:tabular-nums; }
+
+  h2 { font-size:19px; margin: 44px 0 4px; letter-spacing:-.01em; display:flex; align-items:baseline; gap:10px; }
+  h2 .n { font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:700; }
+  .sub { color:var(--muted); font-size:13.5px; margin:0 0 18px; }
+
+  /* ── フロー図 ── */
+  .flow { display:flex; flex-direction:column; gap:14px; }
+  .stage { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+           box-shadow:var(--shadow); padding:16px 18px; position:relative; }
+  .stage.build  { border-left:4px solid var(--raw); }
+  .stage.run    { border-left:4px solid var(--poc); }
+  .stage.show   { border-left:4px solid var(--accent); }
+  .stage-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+  .stage-badge { font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:7px; letter-spacing:.02em; }
+  .build .stage-badge { background:var(--raw-soft); color:var(--raw); }
+  .run   .stage-badge { background:var(--poc-soft); color:var(--poc); }
+  .show  .stage-badge { background:var(--accent-soft); color:var(--accent); }
+  .stage-title { font-weight:700; font-size:15px; }
+  .stage-when { color:var(--muted); font-size:12px; margin-left:auto; }
+
+  .chain { display:flex; align-items:stretch; flex-wrap:wrap; gap:8px; }
+  .node { background:var(--surface-2); border:1px solid var(--border); border-radius:9px;
+          padding:8px 12px; font-size:13px; display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .node .k { font-weight:700; }
+  .node .d { font-size:11.5px; color:var(--muted); }
+  .node.mono .k { font-family:var(--mono); font-size:12.5px; }
+  .node.hi { background:var(--poc-soft); border-color:color-mix(in srgb, var(--poc) 40%, var(--border)); }
+  .node.hi .k { color:var(--poc); }
+  .node.tbl { background:var(--accent-soft); border-color:color-mix(in srgb, var(--accent) 35%, var(--border)); }
+  .node.tbl .k { color:var(--accent); font-family:var(--mono); font-size:12.5px; }
+  .arr { align-self:center; color:var(--muted); font-size:15px; padding:0 1px; }
+
+  .callout { display:flex; gap:14px; background:var(--surface); border:1px solid var(--border);
+             border-left:4px solid var(--poc); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); }
+  .callout .mark { font-size:20px; line-height:1.4; }
+  .callout p { margin:0; font-size:14px; }
+  .callout b { color:var(--poc); }
+
+  table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:4px;
+          background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .tablewrap { overflow-x:auto; }
+  th, td { text-align:left; padding:11px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+  thead th { background:var(--surface-2); font-size:12px; letter-spacing:.03em; color:var(--ink-2); font-weight:700; }
+  tbody tr:last-child td { border-bottom:none; }
+  td.mono, .m { font-family:var(--mono); font-size:12.5px; }
+  .yes { color:var(--good); font-weight:700; } .no { color:var(--bad); font-weight:700; }
+  .tag { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; }
+  .tag.det { background:var(--accent-soft); color:var(--accent); }
+  .tag.llm { background:var(--poc-soft); color:var(--poc); }
+
+  ul.rules { list-style:none; padding:0; margin:6px 0 0; display:grid; gap:8px; }
+  ul.rules li { background:var(--surface); border:1px solid var(--border); border-radius:10px;
+                padding:11px 14px; font-size:13.5px; display:flex; gap:12px; align-items:baseline; }
+  ul.rules .what { font-weight:700; min-width:150px; }
+  ul.rules .where { color:var(--ink-2); }
+  ul.rules code { font-family:var(--mono); font-size:12px; background:var(--surface-2);
+                  border:1px solid var(--border); border-radius:5px; padding:1px 6px; }
+
+  footer { margin-top:48px; padding-top:18px; border-top:1px solid var(--border);
+           color:var(--muted); font-size:12.5px; }
+  @media (max-width:560px){ ul.rules li{flex-direction:column; gap:2px;} ul.rules .what{min-width:0;} }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">テング酒場 池袋東口店 · レコメンドPoC</p>
+    <h1>分析からグラフ表示までのロジックとデータフロー</h1>
+    <p class="lede">生データからPoC専用テーブルを作り、それを読んで集計・作図し、ブラウザに表示するまでの流れ。
+      通常分析とPoC分析で「どのテーブルを使うか」も整理します。</p>
+    <div class="metarow">
+      <span class="chip">PoC専用テーブル <b>poc_ikebukuro_items</b></span>
+      <span class="chip">明細 <b>56,728</b> 行</span>
+      <span class="chip">指標 <b>8</b> カード</span>
+      <span class="chip">対象 <b>2026-03〜05</b></span>
+    </div>
+  </header>
+
+  <main>
+    <h2><span class="n">FLOW</span> 全体の流れ（3段階）</h2>
+    <p class="sub">「除外・分類はテーブル構築時に済ませ、分析時はその1テーブルを読むだけ」が基本設計です。</p>
+
+    <div class="flow">
+      <section class="stage build">
+        <div class="stage-head">
+          <span class="stage-badge">段階 1</span>
+          <span class="stage-title">データ準備（PoC専用テーブルの構築）</span>
+          <span class="stage-when">一度きり・投入済み</span>
+        </div>
+        <div class="chain">
+          <span class="node mono"><span class="k">order_items</span><span class="d">明細・order_id/order_seq/ordered_at</span></span>
+          <span class="node mono"><span class="k">visits</span><span class="d">来店・party_size/visit_start</span></span>
+          <span class="arr">→</span>
+          <span class="node"><span class="k">結合</span><span class="d">visit_id で内部結合</span></span>
+          <span class="arr">→</span>
+          <span class="node hi"><span class="k">除外</span><span class="d">時間帯/定食/対象外/コース/宴/ＦＤ…</span></span>
+          <span class="arr">→</span>
+          <span class="node"><span class="k">分類</span><span class="d">category / fd を付与</span></span>
+          <span class="arr">→</span>
+          <span class="node tbl"><span class="k">poc_ikebukuro_items</span><span class="d">order粒度・除外済 56,728行</span></span>
+        </div>
+        <p class="sub" style="margin:12px 0 0;">※ <b>orders テーブルは不使用</b>（order_id/order_seq/ordered_at は order_items に含まれるため）。原本 visits/orders/order_items は不変。</p>
+      </section>
+
+      <section class="stage run">
+        <div class="stage-head">
+          <span class="stage-badge">段階 2</span>
+          <span class="stage-title">分析実行（「🍶 PoC分析」ボタン押下）</span>
+          <span class="stage-when">押すたび</span>
+        </div>
+        <div class="chain">
+          <span class="node"><span class="k">POST /api/poc/analysis</span><span class="d">poc_router</span></span>
+          <span class="arr">→</span>
+          <span class="node tbl"><span class="k">base_table.build()</span><span class="d">poc_ikebukuro_items を全件取得(~25秒)→DataFrame</span></span>
+          <span class="arr">→</span>
+          <span class="node hi"><span class="k">run_poc_analyses(df)</span><span class="d">8指標を集計＋matplotlib作図</span></span>
+          <span class="arr">→</span>
+          <span class="node"><span class="k">base64 PNG ×8</span><span class="d">{title, image_b64, table, insight}</span></span>
+        </div>
+        <p class="sub" style="margin:12px 0 0;">各指標は<b>固定の pandas / matplotlib コード</b>（母集団フィルタ→groupby/nunique/直積→作図）。同じ入力なら同じ結果。</p>
+      </section>
+
+      <section class="stage show">
+        <div class="stage-head">
+          <span class="stage-badge">段階 3</span>
+          <span class="stage-title">表示</span>
+          <span class="stage-when">即時</span>
+        </div>
+        <div class="chain">
+          <span class="node"><span class="k">ブラウザ</span><span class="d">レスポンス受信</span></span>
+          <span class="arr">→</span>
+          <span class="node"><span class="k">カード描画</span><span class="d">image_b64→&lt;img&gt; / table→表 / insight→本文</span></span>
+          <span class="arr">→</span>
+          <span class="node hi"><span class="k">8カード＋バナー</span><span class="d">ベース分析を差し替え表示</span></span>
+        </div>
+      </section>
+    </div>
+
+    <h2><span class="n">DATA</span> どのテーブルを使う？</h2>
+    <p class="sub">通常分析とPoC分析で参照先が異なります。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>経路</th><th>使うテーブル</th><th>時点</th><th>粒度</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>通常分析</b><br><span class="m" style="color:var(--muted)">RPC get_izakaya_sales</span></td>
+            <td><span class="yes">visits ＋ orders ＋ order_items</span>（3つをJOIN）</td>
+            <td>データ取得時（毎回ライブ）</td>
+            <td>オーダー粒度は潰れる<br>(order_id/seqなし)</td>
+          </tr>
+          <tr>
+            <td><b>PoC分析</b>（実行時）</td>
+            <td><span class="m">poc_ikebukuro_items</span> <b>のみ</b></td>
+            <td>分析実行のたび</td>
+            <td>order粒度を保持</td>
+          </tr>
+          <tr>
+            <td>PoC専用テーブルの<b>構築時</b></td>
+            <td>order_items ＋ visits（<span class="no">orders不使用</span>）</td>
+            <td>過去に一度・投入時</td>
+            <td>order粒度で保存</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2><span class="n">RULES</span> 除外ルールはどこ？</h2>
+    <p class="sub"><b>除外専用テーブルはありません。</b>ルールはファイル＋コードにあり、構築時に適用。通過した行だけが PoCテーブルに入ります（宴/ＦＤは物理削除済み）。</p>
+    <ul class="rules">
+      <li><span class="what">ランチ定食</span><span class="where">ファイル <code>etc/池袋東口店_定食メニュー.txt</code></span></li>
+      <li><span class="what">分析対象外（¥0系等）</span><span class="where">ファイル <code>etc/分析対象外メニュー.csv</code></span></li>
+      <li><span class="what">コース・放題</span><span class="where">コード <code>_COURSE_KW</code>（base_table.py）</span></li>
+      <li><span class="what">宴会「宴」・飲み放題「ＦＤ」</span><span class="where">コード <code>_EXCLUDE_ITEM_KW</code>＋テーブルからDELETE済</span></li>
+      <li><span class="what">システム項目</span><span class="where">分類が <code>除外</code>（item_category_master ＋ POC_OVERRIDES）</span></li>
+      <li><span class="what">時間帯 / 期間 / 単独客 / M行</span><span class="where">コードの条件（base_table.py）</span></li>
+    </ul>
+
+    <h2><span class="n">KEY</span> 重要な区別 — 決定論 vs LLM</h2>
+    <div class="callout">
+      <span class="mark">⚖️</span>
+      <p><span class="tag det">決定論</span> <b>PoCの8指標</b>は固定コードで集計・作図（LLM不使用・再現性あり）。&nbsp;
+         <span class="tag llm">LLM</span> <b>PoCチャットだけ</b>が、同じPoCデータに対してLLMがコードを生成→サーバーでexec→作図、という別経路です。</p>
+    </div>
+
+    <h2><span class="n">MORE</span> 補足 — 同じ df を共有</h2>
+    <p class="sub">カテゴリ内訳・編集・チャットも、段階2で読み込んだ同じ PoCデータ(df) を使います。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>機能</th><th>やること</th></tr></thead>
+        <tbody>
+          <tr><td><b>カテゴリ内訳</b></td><td><span class="m">GET /api/poc/categories</span> → build()のdfをcategory別に集計</td></tr>
+          <tr><td><b>カテゴリ編集</b></td><td>PATCHで <span class="m">poc_ikebukuro_items</span> のcategoryを更新 → キャッシュ破棄 → 次回build()で反映</td></tr>
+          <tr><td><b>PoCチャット</b></td><td>dfを日本語カラム化しセッションへ → LLMがコード生成→exec→グラフ</td></tr>
+          <tr><td><b>エビデンスDL</b></td><td>原本→変換→集計の来歴をテキスト化してダウンロード</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    要約：<b>除外・分類は構築時に済ませ、PoCテーブルには残った行だけ。</b>分析はそのテーブルを読み、サーバーで固定ロジック集計＋matplotlib作図し、画像をブラウザに表示する。
+    通常分析は毎回RPCで3テーブルをライブ参照（order粒度は潰れる）。
+  </footer>
+</div>
