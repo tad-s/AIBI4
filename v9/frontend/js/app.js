@@ -340,7 +340,7 @@ function buildTable(rows, drill) {
       btn.className = "drill-btn";
       btn.textContent = drill.label || "内訳";
       const key = row[drill.col];
-      btn.addEventListener("click", () => openDrill(drill.type, key));
+      btn.addEventListener("click", () => openDrill(drill.type, key, !!drill.exclude));
       td.appendChild(btn);
     }
   });
@@ -350,28 +350,29 @@ function buildTable(rows, drill) {
 // ── ドリルダウン内訳モーダル ──
 function closeDrill() { drillModal.classList.remove("open"); }
 
-async function openDrill(type, value) {
+async function openDrill(type, value, exclude) {
   drillModal.classList.add("open");
+  const exNote = exclude ? "（上位3品除く）" : "";
   $("drill-modal-title").textContent = "内訳";
   $("drill-modal-sub").textContent = "";
   drillModalBody.innerHTML = '<div style="padding:24px;color:var(--text-muted);">読み込み中…</div>';
   try {
     if (type === "item_hours") {
-      const d = await api.drillPocItemHours(value);
-      $("drill-modal-title").textContent = `${value} の時間帯別`;
-      $("drill-modal-sub").textContent = `PoC①母集団（2組以上・15品以上）での注文時刻別 数量。合計 ${d.total_qty.toLocaleString()} 点。`;
+      const d = await api.drillPocItemHours(value, exclude);
+      $("drill-modal-title").textContent = `${value} の時間帯別${exNote}`;
+      $("drill-modal-sub").textContent = `PoC①母集団（2組以上・15品以上${exclude ? "・上位3品除く" : ""}）での注文時刻別 数量。合計 ${d.total_qty.toLocaleString()} 点。`;
       renderDrillHours(d.hours);
     } else if (type === "category_pair") {
       const [a, b] = value.split("→").map(s => s.trim());
-      const d = await api.drillPocPair(a, b);
-      $("drill-modal-title").textContent = `${value} の商品ペア内訳`;
-      $("drill-modal-sub").textContent = `このカテゴリペアを構成する具体的な商品ペア（上位${d.rows.length}）。`;
+      const d = await api.drillPocPair(a, b, exclude);
+      $("drill-modal-title").textContent = `${value} の商品ペア内訳${exNote}`;
+      $("drill-modal-sub").textContent = `このカテゴリペアを構成する具体的な商品ペア（上位${d.rows.length}）${exclude ? "・上位3品を除外" : ""}。`;
       renderDrillRows(d.rows);
     } else if (type === "category_seq3") {
       const [a, b, c] = value.split("→").map(s => s.trim());
-      const d = await api.drillPocSeq3(a, b, c);
-      $("drill-modal-title").textContent = `${value} の商品3連鎖内訳`;
-      $("drill-modal-sub").textContent = `このカテゴリ3連鎖を構成する具体的な商品3連鎖（上位${d.rows.length}）。`;
+      const d = await api.drillPocSeq3(a, b, c, exclude);
+      $("drill-modal-title").textContent = `${value} の商品3連鎖内訳${exNote}`;
+      $("drill-modal-sub").textContent = `このカテゴリ3連鎖を構成する具体的な商品3連鎖（上位${d.rows.length}）${exclude ? "・上位3品を除外" : ""}。`;
       renderDrillRows(d.rows);
     }
   } catch (e) {

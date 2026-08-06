@@ -104,20 +104,23 @@ export async function getPocCategories() {
   return r.json();
 }
 
-export async function drillPocPair(a, b) {
-  const r = await fetch(`${BASE}/api/poc/drill/pair?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+export async function drillPocPair(a, b, exclude) {
+  const ex = exclude ? "&exclude=true" : "";
+  const r = await fetch(`${BASE}/api/poc/drill/pair?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}${ex}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
-export async function drillPocSeq3(a, b, c) {
-  const r = await fetch(`${BASE}/api/poc/drill/seq3?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}&c=${encodeURIComponent(c)}`);
+export async function drillPocSeq3(a, b, c, exclude) {
+  const ex = exclude ? "&exclude=true" : "";
+  const r = await fetch(`${BASE}/api/poc/drill/seq3?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}&c=${encodeURIComponent(c)}${ex}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
-export async function drillPocItemHours(item) {
-  const r = await fetch(`${BASE}/api/poc/drill/item-hours?item=${encodeURIComponent(item)}`);
+export async function drillPocItemHours(item, exclude) {
+  const ex = exclude ? "&exclude=true" : "";
+  const r = await fetch(`${BASE}/api/poc/drill/item-hours?item=${encodeURIComponent(item)}${ex}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }

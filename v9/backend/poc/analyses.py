@@ -386,7 +386,8 @@ def _run_one(fn, df: pd.DataFrame) -> dict:
 def _excluded_variant(card: dict) -> dict:
     card = dict(card)
     card["title"] = card["title"] + "【上位3品除く】"
-    card.pop("drill", None)   # 除外版はドリルダウン無効
+    if card.get("drill"):     # 除外版のドリルも上位3品を外して整合させる
+        card["drill"] = {**card["drill"], "exclude": True}
     note = "※ サイコロステ・フライドポテト・肉豆腐 を除外した集計"
     card["insights"] = [note] + list(card.get("insights") or [])
     if card.get("insight"):

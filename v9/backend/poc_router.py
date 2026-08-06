@@ -142,26 +142,26 @@ _VALID_CATS = {"ドリンク", "揚げ物", "串", "海鮮", "鍋", "サラダ",
 
 
 @router.get("/poc/drill/pair")
-async def poc_drill_pair(a: str, b: str):
-    """カテゴリペア a→b を構成する商品ペアの内訳。"""
+async def poc_drill_pair(a: str, b: str, exclude: bool = False):
+    """カテゴリペア a→b を構成する商品ペアの内訳（exclude=上位3品除く）。"""
     df = await run_in_threadpool(base_table.build)
-    rows = await run_in_threadpool(drill.item_pairs_for_category_pair, df, a, b)
-    return {"category_pair": f"{a} → {b}", "rows": rows}
+    rows = await run_in_threadpool(drill.item_pairs_for_category_pair, df, a, b, exclude)
+    return {"category_pair": f"{a} → {b}", "excluded": exclude, "rows": rows}
 
 
 @router.get("/poc/drill/seq3")
-async def poc_drill_seq3(a: str, b: str, c: str):
-    """カテゴリ3連鎖 a→b→c を構成する商品3連鎖の内訳。"""
+async def poc_drill_seq3(a: str, b: str, c: str, exclude: bool = False):
+    """カテゴリ3連鎖 a→b→c を構成する商品3連鎖の内訳（exclude=上位3品除く）。"""
     df = await run_in_threadpool(base_table.build)
-    rows = await run_in_threadpool(drill.item_triples_for_category_seq, df, a, b, c)
-    return {"category_seq": f"{a} → {b} → {c}", "rows": rows}
+    rows = await run_in_threadpool(drill.item_triples_for_category_seq, df, a, b, c, exclude)
+    return {"category_seq": f"{a} → {b} → {c}", "excluded": exclude, "rows": rows}
 
 
 @router.get("/poc/drill/item-hours")
-async def poc_drill_item_hours(item: str):
-    """PoC①の商品の時間帯別 数量。"""
+async def poc_drill_item_hours(item: str, exclude: bool = False):
+    """PoC①の商品の時間帯別 数量（exclude=上位3品除いた母集団）。"""
     df = await run_in_threadpool(base_table.build)
-    return await run_in_threadpool(drill.item_hours, df, item)
+    return await run_in_threadpool(drill.item_hours, df, item, exclude)
 
 
 @router.post("/poc/categories/override")
