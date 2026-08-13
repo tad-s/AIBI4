@@ -327,6 +327,12 @@ def _build_df(rows: list[dict]) -> pd.DataFrame:
         "unit_price":     "単価",
     })
     df = df.drop(columns=["_line_total"], errors="ignore")
+    # PoC用に精緻化した分類器を流用し、カテゴリ/フードドリンク列を付与（全店舗・行は落とさない）
+    try:
+        from poc.categorize import add_categories
+        df = add_categories(df, "商品名")
+    except Exception:  # noqa: BLE001  分類器が無くても取得自体は継続
+        pass
     return df.reset_index(drop=True)
 
 
