@@ -392,6 +392,29 @@ function renderDrillRows(rows) {
   wrap.className = "table-wrap";
   wrap.appendChild(buildTable(rows));
   drillModalBody.appendChild(wrap);
+  // 比較: 推薦スコアの横棒（参考画像の「比較」列に相当）
+  if ("推薦スコア" in rows[0]) {
+    const labelKey = "商品ペア" in rows[0] ? "商品ペア"
+      : ("商品3連鎖" in rows[0] ? "商品3連鎖" : Object.keys(rows[0])[0]);
+    const top = rows.slice(0, 10);
+    const max = Math.max(...top.map(r => r.推薦スコア || 0), 1);
+    const h = document.createElement("div");
+    h.style.cssText = "margin:14px 4px 6px;font-size:13px;font-weight:600;color:var(--text-muted);";
+    h.textContent = "推薦スコア比較（上位10）　スコア=卓数×(1+支持率)";
+    drillModalBody.appendChild(h);
+    const box = document.createElement("div");
+    box.className = "hours-chart";
+    top.forEach(r => {
+      const row = document.createElement("div");
+      row.className = "hours-row";
+      row.innerHTML =
+        `<span class="hours-label" style="min-width:200px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r[labelKey]}</span>` +
+        `<span class="hours-bar-track"><span class="hours-bar" style="width:${r.推薦スコア / max * 100}%"></span></span>` +
+        `<span class="hours-val">${r.推薦スコア.toFixed(1)} <span class="hours-sub">/ 支持率${r["支持率%"]}% ・ ${r.卓数}卓</span></span>`;
+      box.appendChild(row);
+    });
+    drillModalBody.appendChild(box);
+  }
 }
 
 function renderDrillHours(hours) {

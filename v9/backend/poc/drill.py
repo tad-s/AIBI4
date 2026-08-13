@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import pandas as pd
 
-from poc.analyses import (TOP3_EXCLUDE, _consecutive, _consecutive3, _party2,
-                          _visits_ge15, distinct_item_chains)
+from poc.analyses import (TOP3_EXCLUDE, _add_metrics, _consecutive,
+                          _consecutive3, _party2, _visits_ge15,
+                          distinct_item_chains)
 
 _CACHE: dict = {"_dfid": None}
 
@@ -26,13 +27,20 @@ def _entry(df: pd.DataFrame, exclude: bool) -> dict:
         base = df[~df["item_name"].isin(TOP3_EXCLUDE)] if exclude else df
         _CACHE[key] = {"df": base.reset_index(drop=True),
                        "catmap": dict(zip(base["item_name"], base["category"])),
-                       "pair": None, "seq3": None}
+                       "pair": None, "seq3": None, "T": None}
     return _CACHE[key]
 
 
 def _pop_cat(df: pd.DataFrame) -> pd.DataFrame:
     # カテゴリ継続(④/⑥)・PoC①と同じ母集団: 2組以上かつ15品以上
     return _visits_ge15(_party2(df))
+
+
+def _total_visits(e: dict) -> int:
+    """内訳の母集団総来店数（支持率の分母）。カード側と同一母集団。"""
+    if e.get("T") is None:
+        e["T"] = int(_pop_cat(e["df"])["visit_id"].nunique())
+    return e["T"]
 
 
 def item_pairs_for_category_pair(df, cat_a, cat_b, exclude=False, top=20) -> list[dict]:
@@ -47,7 +55,11 @@ def item_pairs_for_category_pair(df, cat_a, cat_b, exclude=False, top=20) -> lis
             for (x, y), c in cnt.items()
             if catmap.get(x) == cat_a and catmap.get(y) == cat_b]
     rows.sort(key=lambda r: (-r["卓数"], -r["連続注文数"]))
-    return rows[:top]
+    rows = rows[:top]
+    _add_metrics(rows, _total_visits(e))
+    for r in rows:
+        r["推薦文"] = f"「{r['前(item_a)']}」の後に「{r['次(item_b)']}」を提案"
+    return rows
 
 
 def item_triples_for_category_seq(df, a, b, c, exclude=False, distinct=False, top=20) -> list[dict]:
@@ -61,11 +73,17 @@ def item_triples_for_category_seq(df, a, b, c, exclude=False, distinct=False, to
             e[key] = (cnt, tbl)
     cnt, tbl = e[key]
     catmap = e["catmap"]
-    rows = [{"商品3連鎖": f"{x} → {y} → {z}", "連続注文数": v, "卓数": len(tbl[(x, y, z)])}
+    rows = [{"商品3連鎖": f"{x} → {y} → {z}", "連続注文数": v, "卓数": len(tbl[(x, y, z)]),
+             "_c3": (x, y, z)}
             for (x, y, z), v in cnt.items()
             if catmap.get(x) == a and catmap.get(y) == b and catmap.get(z) == c]
     rows.sort(key=lambda r: (-r["卓数"], -r["連続注文数"]))
-    return rows[:top]
+    rows = rows[:top]
+    _add_metrics(rows, _total_visits(e))
+    for r in rows:
+        x, y, z = r.pop("_c3")
+        r["推薦文"] = f"「{x}」→「{y}」の後に「{z}」を提案"
+    return rows
 
 
 def item_hours(df, item, exclude=False) -> dict:

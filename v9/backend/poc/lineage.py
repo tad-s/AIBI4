@@ -69,6 +69,22 @@ _ANALYSIS_LOGIC = {
 }
 
 
+# 各テーブル列（指標）の定義。数値がどの計算に基づくかを開示する。
+_METRIC_DEFS = [
+    "・出現回数 / 連続注文数 : そのパターン(ペア/3連鎖)が母集団で観測された延べ回数。",
+    "    2品版=隣接オーダーの有向出現数、3品版=直積での延べ数、重複排除版=別商品チェーンの延べ数。",
+    "・卓数 : そのパターンが1回以上出現した来店(visit_id)のユニーク数（延べではなく実来店数）。",
+    "・支持率% : 卓数 ÷ 母集団総来店数 × 100。",
+    "    母集団総来店数＝その指標の母集団(例 カテゴリ継続=2組以上かつ15品以上)に属する来店(visit_id)の総数。",
+    "    「その組み合わせが、対象来店の何%の卓で実際に起きたか」を表す普及率。",
+    "・推薦スコア : 卓数 × (1 + 支持率)  ※支持率は0〜1の小数(支持率%÷100)。",
+    "    出現の絶対量(卓数)を、普及度(支持率)で重み付けした総合おすすめ度。卓数が多く支持率も高いほど大。",
+    "・推薦文 : 内訳(商品ペア/3連鎖)の並びから機械生成する提案テキスト。",
+    "    ペア=「『A』の後に『B』を提案」、3連鎖=「『A』→『B』の後に『C』を提案」。",
+    "・比較(内訳モーダルの横棒) : 推薦スコアを内訳上位で相対比較したバー（数値の可視化のみ・別計算なし）。",
+]
+
+
 def build_evidence_text(df: pd.DataFrame, results: list[dict], meta: dict) -> str:
     L: list[str] = []
     L.append("=" * 64)
@@ -108,6 +124,10 @@ def build_evidence_text(df: pd.DataFrame, results: list[dict], meta: dict) -> st
             L.append("    " + " | ".join(keys))
             for rec in tbl[:5]:
                 L.append("    " + " | ".join(str(rec.get(k, "")) for k in keys))
+    L.append("")
+    L.append("■ 4. 指標（テーブル列）の定義と計算式")
+    for line in _METRIC_DEFS:
+        L.append("  " + line)
     L.append("")
     L.append("※ 原本(visits/orders/order_items)は一切変更していません（PoC専用テーブルのみ使用）。")
     return "\n".join(L)

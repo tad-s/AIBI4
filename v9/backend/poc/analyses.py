@@ -56,6 +56,17 @@ def _visits_ge15(df):
     return df[df["visit_id"].isin(vq[vq >= 15].index)]
 
 
+def _add_metrics(records, total_visits):
+    """各行に 支持率%（卓数/母集団総来店数）と 推薦スコア（卓数×(1+支持率)）を付与。"""
+    T = total_visits or 1
+    for r in records:
+        taku = int(r.get("卓数", 0))
+        sup = taku / T
+        r["支持率%"] = round(sup * 100, 2)
+        r["推薦スコア"] = round(taku * (1 + sup), 2)
+    return records
+
+
 def _consecutive(d, col):
     fd = dict(zip(d[col], d["fd"]))
     cnt: Counter = Counter()
@@ -235,6 +246,7 @@ def analysis4_category(df):
     rows = [{"カテゴリ連続": f"{a} → {b}", "出現回数": c, "卓数": len(tbl[(a, b)])}
             for (a, b), c in cnt.items() if len(tbl[(a, b)]) >= MIN_TABLES]
     top = pd.DataFrame(rows).sort_values(["卓数", "出現回数"], ascending=False).head(12)
+    total_visits = int(d["visit_id"].nunique())
 
     fig, ax = plt.subplots(figsize=(11, 5))
     _hbar(ax, top["カテゴリ連続"].tolist(), top["卓数"].tolist(), _C_CAT,
@@ -247,9 +259,10 @@ def analysis4_category(df):
         "insights": [
             "商品名では埋もれる傾向をカテゴリ粒度で可視化",
             "『1杯目の後に何のカテゴリが続くか』を示す",
+            f"母集団総来店数={total_visits:,}。支持率%=卓数/総来店数、推薦スコア=卓数×(1+支持率)。",
         ],
         "advice": ["継続の強いカテゴリを次オーダーの推奨カテゴリに設定", "例: ドリンク→揚げ物／ヘビー の導線強化"],
-        "table": top.to_dict("records"),
+        "table": _add_metrics(top.to_dict("records"), total_visits),
         "drill": {"type": "category_pair", "col": "カテゴリ連続", "label": "内訳を見る"},
     }
 
@@ -288,7 +301,7 @@ def _seq3_frame(d, col):
     return pd.DataFrame(rows).sort_values(["卓数", "出現回数"], ascending=False).reset_index(drop=True)
 
 
-def _seq3_card(top, card_title, chart_title, color, level_note, advice, drill=None):
+def _seq3_card(top, card_title, chart_title, color, level_note, advice, drill=None, total_visits=0):
     fig, ax = plt.subplots(figsize=(12, 5))
     if len(top):
         _hbar(ax, top["連続3品"].head(12).tolist(), top["卓数"].head(12).tolist(), color, chart_title, "卓数")
@@ -297,6 +310,7 @@ def _seq3_card(top, card_title, chart_title, color, level_note, advice, drill=No
         ax.axis("off"); ax.set_title(chart_title)
     fig.tight_layout()
     head = top.iloc[0]["連続3品"] if len(top) else "該当なし"
+    table = _add_metrics(top.head(12).to_dict("records"), total_visits)
     return {
         "title": card_title,
         "image_b64": _b64(fig),
@@ -304,29 +318,33 @@ def _seq3_card(top, card_title, chart_title, color, level_note, advice, drill=No
                     if len(top) else f"{MIN3}卓以上の3連鎖は見つかりませんでした（閾値調整の余地）。"),
         "insights": [
             "隣接する3オーダー(前→中→次)の A→B→C。有向・直積・卓数で順位付け。",
-            f"{level_note}　閾値: {MIN3}卓以上。",
+            f"{level_note}　閾値: {MIN3}卓以上。母集団総来店数={total_visits:,}。支持率%=卓数/総来店数、推薦スコア=卓数×(1+支持率)。",
         ],
         "advice": advice,
-        "table": top.head(12).to_dict("records"),
+        "table": table,
         **({"drill": drill} if drill else {}),
     }
 
 
 def analysis5_seq3_item(df):
-    top = _seq3_frame(_party2(df), "item_name")
+    d = _party2(df)
+    top = _seq3_frame(d, "item_name")
     return _seq3_card(
         top, "PoC⑤ 連続注文3品（商品）", "PoC⑤ 連続注文3品（商品 A→B→C・5卓以上）", _C_SEQ3,
         "母集団: 2組以上（#3連続ペアと同じ）。商品名粒度。",
-        ["A→Bの後の3品目Cを『次の一手』として提示", "3連鎖上位をコース/セット設計に反映"])
+        ["A→Bの後の3品目Cを『次の一手』として提示", "3連鎖上位をコース/セット設計に反映"],
+        total_visits=int(d["visit_id"].nunique()))
 
 
 def analysis6_seq3_category(df):
-    top = _seq3_frame(_visits_ge15(_party2(df)), "category")
+    d = _visits_ge15(_party2(df))
+    top = _seq3_frame(d, "category")
     return _seq3_card(
         top, "PoC⑥ 連続注文3品（カテゴリ）", "PoC⑥ 連続注文3品（カテゴリ A→B→C・5卓以上）", _C_CAT,
         "母集団: 2組以上かつ15品以上（#4カテゴリと同じ）。カテゴリ粒度。",
         ["ドリンク→○→○ の定番フローを推奨導線に", "3カテゴリの流れをコース構成に反映"],
-        drill={"type": "category_seq3", "col": "連続3品", "label": "内訳を見る"})
+        drill={"type": "category_seq3", "col": "連続3品", "label": "内訳を見る"},
+        total_visits=int(d["visit_id"].nunique()))
 
 
 # ══════ 重複排除版（3品すべて別商品。同一商品の繰り返しはスキップして次の商品へ繰り上げ）══════
@@ -370,7 +388,8 @@ def analysis5b_seq3_item_distinct(df):
         top, "PoC⑤ 連続注文3品（商品・重複排除）",
         "PoC⑤ 連続注文3品（商品・重複排除・5卓以上）", _C_SEQ3,
         "母集団: 2組以上。★3品すべて別商品（同一商品の繰り返しはスキップし次の商品へ繰り上げ）。",
-        ["同一商品の再注文を除いた真の商品遷移を提示", "3連鎖上位を次の一手・コース設計に反映"])
+        ["同一商品の再注文を除いた真の商品遷移を提示", "3連鎖上位を次の一手・コース設計に反映"],
+        total_visits=int(d["visit_id"].nunique()))
 
 
 def analysis6b_seq3_category_distinct(df):
@@ -395,7 +414,8 @@ def analysis6b_seq3_category_distinct(df):
         "PoC⑥ 連続注文3品（カテゴリ・重複排除・5卓以上）", _C_CAT,
         "母集団: 2組以上かつ15品以上。★重複判定は商品ベース（同一商品の繰り返しのみ除外・別商品なら同カテゴリ連続も残す）。",
         ["同一商品の再注文を除いたカテゴリ遷移を提示", "3カテゴリの流れをコース構成に反映"],
-        drill={"type": "category_seq3", "col": "連続3品", "label": "内訳を見る", "distinct": True})
+        drill={"type": "category_seq3", "col": "連続3品", "label": "内訳を見る", "distinct": True},
+        total_visits=int(d["visit_id"].nunique()))
 
 
 def analysis7_coorder3_item(df):
@@ -464,7 +484,24 @@ def _excluded_variant(card: dict) -> dict:
     return card
 
 
+# 直近の分析結果をデータ内容ベースでキャッシュ（再クリック/タブ切替を即時化）。
+# カテゴリ編集で df が変わると fingerprint も変わるため自動的に再計算される。
+_RESULT_CACHE: dict = {"sig": None, "results": None}
+
+
+def _df_sig(df: pd.DataFrame):
+    """行数＋カテゴリ列のハッシュ。カテゴリ編集・行数変化を検知（id再利用に非依存）。"""
+    try:
+        h = int(pd.util.hash_pandas_object(df["category"], index=False).sum() & 0xFFFFFFFFFFFF)
+    except Exception:  # noqa: BLE001
+        h = 0
+    return (len(df), h)
+
+
 def run_poc_analyses(df: pd.DataFrame) -> list[dict]:
+    sig = _df_sig(df)
+    if _RESULT_CACHE.get("sig") == sig and _RESULT_CACHE.get("results") is not None:
+        return _RESULT_CACHE["results"]
     fns = [analysis1, analysis2, analysis3, analysis4, analysis4_category,
            analysis5_seq3_item, analysis5b_seq3_item_distinct,
            analysis6_seq3_category, analysis6b_seq3_category_distinct,
@@ -474,4 +511,6 @@ def run_poc_analyses(df: pd.DataFrame) -> list[dict]:
     for fn in fns:
         out.append(_run_one(fn, df))                       # 通常版
         out.append(_excluded_variant(_run_one(fn, df_ex)))  # 上位3品除外版
+    _RESULT_CACHE["sig"] = sig
+    _RESULT_CACHE["results"] = out
     return out
