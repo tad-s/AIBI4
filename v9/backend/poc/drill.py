@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from poc.analyses import TOP3_EXCLUDE, _consecutive, _consecutive3, _party2, _visits_ge15
+from poc.analyses import (TOP3_EXCLUDE, _consecutive, _consecutive3, _party2,
+                          _visits_ge15, distinct_item_chains)
 
 _CACHE: dict = {"_dfid": None}
 
@@ -49,12 +50,16 @@ def item_pairs_for_category_pair(df, cat_a, cat_b, exclude=False, top=20) -> lis
     return rows[:top]
 
 
-def item_triples_for_category_seq(df, a, b, c, exclude=False, top=20) -> list[dict]:
+def item_triples_for_category_seq(df, a, b, c, exclude=False, distinct=False, top=20) -> list[dict]:
     e = _entry(df, exclude)
-    if e["seq3"] is None:
-        cnt, tbl, _ = _consecutive3(_pop_cat(e["df"]), "item_name")
-        e["seq3"] = (cnt, tbl)
-    cnt, tbl = e["seq3"]
+    key = "seq3d" if distinct else "seq3"
+    if e.get(key) is None:
+        if distinct:  # 3品すべて別商品（重複排除版）に対応した内訳
+            e[key] = distinct_item_chains(_pop_cat(e["df"]))
+        else:
+            cnt, tbl, _ = _consecutive3(_pop_cat(e["df"]), "item_name")
+            e[key] = (cnt, tbl)
+    cnt, tbl = e[key]
     catmap = e["catmap"]
     rows = [{"商品3連鎖": f"{x} → {y} → {z}", "連続注文数": v, "卓数": len(tbl[(x, y, z)])}
             for (x, y, z), v in cnt.items()

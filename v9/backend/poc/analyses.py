@@ -329,6 +329,75 @@ def analysis6_seq3_category(df):
         drill={"type": "category_seq3", "col": "連続3品", "label": "内訳を見る"})
 
 
+# ══════ 重複排除版（3品すべて別商品。同一商品の繰り返しはスキップして次の商品へ繰り上げ）══════
+def distinct_item_chains(d):
+    """来店ごとに注文列(order_seq→line_index)を歩き、既出商品はスキップして
+    3品すべて異なる有向チェーン A→B→C を生成。(cnt, tbl[商品トリプル]) を返す。"""
+    cnt: Counter = Counter()
+    tbl: defaultdict = defaultdict(set)
+    d2 = d.sort_values(["visit_id", "order_seq", "line_index"])
+    for vid, g in d2.groupby("visit_id", sort=False):
+        seq = g["item_name"].tolist()
+        n = len(seq)
+        for i in range(n):
+            chain: list = []
+            for j in range(i, n):
+                x = seq[j]
+                if x not in chain:
+                    chain.append(x)
+                    if len(chain) == 3:
+                        t = (chain[0], chain[1], chain[2])
+                        cnt[t] += 1
+                        tbl[t].add(vid)
+                        break
+    return cnt, tbl
+
+
+def _fdcat(cat):
+    return "ドリンク" if cat == "ドリンク" else "フード"
+
+
+def analysis5b_seq3_item_distinct(df):
+    d = _party2(df)
+    cnt, tbl = distinct_item_chains(d)
+    fd = dict(zip(df["item_name"], df["fd"]))
+    rows = [{"連続3品": f"{a} → {b} → {c}", "組合せ": f"{fd.get(a)}→{fd.get(b)}→{fd.get(c)}",
+             "出現回数": v, "卓数": len(tbl[(a, b, c)])}
+            for (a, b, c), v in cnt.items() if len(tbl[(a, b, c)]) >= MIN3]
+    top = (pd.DataFrame(rows).sort_values(["卓数", "出現回数"], ascending=False).reset_index(drop=True)
+           if rows else pd.DataFrame(columns=["連続3品", "組合せ", "出現回数", "卓数"]))
+    return _seq3_card(
+        top, "PoC⑤ 連続注文3品（商品・重複排除）",
+        "PoC⑤ 連続注文3品（商品・重複排除・5卓以上）", _C_SEQ3,
+        "母集団: 2組以上。★3品すべて別商品（同一商品の繰り返しはスキップし次の商品へ繰り上げ）。",
+        ["同一商品の再注文を除いた真の商品遷移を提示", "3連鎖上位を次の一手・コース設計に反映"])
+
+
+def analysis6b_seq3_category_distinct(df):
+    d = _visits_ge15(_party2(df))
+    cnt, tbl = distinct_item_chains(d)
+    catmap = dict(zip(df["item_name"], df["category"]))
+    ccnt: Counter = Counter()
+    ctbl: defaultdict = defaultdict(set)
+    for (a, b, c), v in cnt.items():
+        ct = (catmap.get(a), catmap.get(b), catmap.get(c))
+        if None in ct:
+            continue
+        ccnt[ct] += v
+        ctbl[ct] |= tbl[(a, b, c)]
+    rows = [{"連続3品": f"{a} → {b} → {c}", "組合せ": f"{_fdcat(a)}→{_fdcat(b)}→{_fdcat(c)}",
+             "出現回数": v, "卓数": len(ctbl[(a, b, c)])}
+            for (a, b, c), v in ccnt.items() if len(ctbl[(a, b, c)]) >= MIN3]
+    top = (pd.DataFrame(rows).sort_values(["卓数", "出現回数"], ascending=False).reset_index(drop=True)
+           if rows else pd.DataFrame(columns=["連続3品", "組合せ", "出現回数", "卓数"]))
+    return _seq3_card(
+        top, "PoC⑥ 連続注文3品（カテゴリ・重複排除）",
+        "PoC⑥ 連続注文3品（カテゴリ・重複排除・5卓以上）", _C_CAT,
+        "母集団: 2組以上かつ15品以上。★重複判定は商品ベース（同一商品の繰り返しのみ除外・別商品なら同カテゴリ連続も残す）。",
+        ["同一商品の再注文を除いたカテゴリ遷移を提示", "3カテゴリの流れをコース構成に反映"],
+        drill={"type": "category_seq3", "col": "連続3品", "label": "内訳を見る", "distinct": True})
+
+
 def analysis7_coorder3_item(df):
     d = _party2(df)
     fdmap = dict(zip(d["item_name"], d["fd"]))
@@ -397,7 +466,9 @@ def _excluded_variant(card: dict) -> dict:
 
 def run_poc_analyses(df: pd.DataFrame) -> list[dict]:
     fns = [analysis1, analysis2, analysis3, analysis4, analysis4_category,
-           analysis5_seq3_item, analysis6_seq3_category, analysis7_coorder3_item]
+           analysis5_seq3_item, analysis5b_seq3_item_distinct,
+           analysis6_seq3_category, analysis6b_seq3_category_distinct,
+           analysis7_coorder3_item]
     df_ex = df[~df["item_name"].isin(TOP3_EXCLUDE)].reset_index(drop=True)
     out = []
     for fn in fns:

@@ -150,11 +150,11 @@ async def poc_drill_pair(a: str, b: str, exclude: bool = False):
 
 
 @router.get("/poc/drill/seq3")
-async def poc_drill_seq3(a: str, b: str, c: str, exclude: bool = False):
-    """カテゴリ3連鎖 a→b→c を構成する商品3連鎖の内訳（exclude=上位3品除く）。"""
+async def poc_drill_seq3(a: str, b: str, c: str, exclude: bool = False, distinct: bool = False):
+    """カテゴリ3連鎖 a→b→c を構成する商品3連鎖の内訳（exclude=上位3品除く / distinct=重複排除版）。"""
     df = await run_in_threadpool(base_table.build)
-    rows = await run_in_threadpool(drill.item_triples_for_category_seq, df, a, b, c, exclude)
-    return {"category_seq": f"{a} → {b} → {c}", "excluded": exclude, "rows": rows}
+    rows = await run_in_threadpool(drill.item_triples_for_category_seq, df, a, b, c, exclude, distinct)
+    return {"category_seq": f"{a} → {b} → {c}", "excluded": exclude, "distinct": distinct, "rows": rows}
 
 
 @router.get("/poc/drill/item-hours")

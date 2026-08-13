@@ -340,7 +340,7 @@ function buildTable(rows, drill) {
       btn.className = "drill-btn";
       btn.textContent = drill.label || "内訳";
       const key = row[drill.col];
-      btn.addEventListener("click", () => openDrill(drill.type, key, !!drill.exclude));
+      btn.addEventListener("click", () => openDrill(drill, key));
       td.appendChild(btn);
     }
   });
@@ -350,29 +350,31 @@ function buildTable(rows, drill) {
 // ── ドリルダウン内訳モーダル ──
 function closeDrill() { drillModal.classList.remove("open"); }
 
-async function openDrill(type, value, exclude) {
+async function openDrill(drill, value) {
+  const type = drill.type, exclude = !!drill.exclude, distinct = !!drill.distinct;
   drillModal.classList.add("open");
-  const exNote = exclude ? "（上位3品除く）" : "";
+  const notes = (exclude ? "・上位3品除く" : "") + (distinct ? "・重複排除" : "");
+  const paren = notes ? `（${notes.replace(/^・/, "")}）` : "";
   $("drill-modal-title").textContent = "内訳";
   $("drill-modal-sub").textContent = "";
   drillModalBody.innerHTML = '<div style="padding:24px;color:var(--text-muted);">読み込み中…</div>';
   try {
     if (type === "item_hours") {
       const d = await api.drillPocItemHours(value, exclude);
-      $("drill-modal-title").textContent = `${value} の時間帯別${exNote}`;
+      $("drill-modal-title").textContent = `${value} の時間帯別${paren}`;
       $("drill-modal-sub").textContent = `PoC①母集団（2組以上・15品以上${exclude ? "・上位3品除く" : ""}）での注文時刻別 数量。合計 ${d.total_qty.toLocaleString()} 点。`;
       renderDrillHours(d.hours);
     } else if (type === "category_pair") {
       const [a, b] = value.split("→").map(s => s.trim());
       const d = await api.drillPocPair(a, b, exclude);
-      $("drill-modal-title").textContent = `${value} の商品ペア内訳${exNote}`;
-      $("drill-modal-sub").textContent = `このカテゴリペアを構成する具体的な商品ペア（上位${d.rows.length}）${exclude ? "・上位3品を除外" : ""}。`;
+      $("drill-modal-title").textContent = `${value} の商品ペア内訳${paren}`;
+      $("drill-modal-sub").textContent = `このカテゴリペアを構成する具体的な商品ペア（上位${d.rows.length}）${notes}。`;
       renderDrillRows(d.rows);
     } else if (type === "category_seq3") {
       const [a, b, c] = value.split("→").map(s => s.trim());
-      const d = await api.drillPocSeq3(a, b, c, exclude);
-      $("drill-modal-title").textContent = `${value} の商品3連鎖内訳${exNote}`;
-      $("drill-modal-sub").textContent = `このカテゴリ3連鎖を構成する具体的な商品3連鎖（上位${d.rows.length}）${exclude ? "・上位3品を除外" : ""}。`;
+      const d = await api.drillPocSeq3(a, b, c, exclude, distinct);
+      $("drill-modal-title").textContent = `${value} の商品3連鎖内訳${paren}`;
+      $("drill-modal-sub").textContent = `このカテゴリ3連鎖を構成する具体的な商品3連鎖（上位${d.rows.length}）${notes}。`;
       renderDrillRows(d.rows);
     }
   } catch (e) {
@@ -680,7 +682,7 @@ async function runPocAnalysisFlow() {
   const origLabel = "🍶 テング池袋東口店 PoC分析";
   try {
     pocBtn.disabled = true;
-    pocBtn.textContent = "⏳ PoC分析中…（初回は1分ほど）";
+    pocBtn.textContent = "⏳ PoC分析中…（初回は1〜2分ほど）";
     if (!sessionId) {
       const { session_id } = await api.createSession();
       sessionId = session_id;

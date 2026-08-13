@@ -111,9 +111,10 @@ export async function drillPocPair(a, b, exclude) {
   return r.json();
 }
 
-export async function drillPocSeq3(a, b, c, exclude) {
+export async function drillPocSeq3(a, b, c, exclude, distinct) {
   const ex = exclude ? "&exclude=true" : "";
-  const r = await fetch(`${BASE}/api/poc/drill/seq3?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}&c=${encodeURIComponent(c)}${ex}`);
+  const di = distinct ? "&distinct=true" : "";
+  const r = await fetch(`${BASE}/api/poc/drill/seq3?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}&c=${encodeURIComponent(c)}${ex}${di}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
