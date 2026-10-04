@@ -112,7 +112,8 @@ def _coerce(df: pd.DataFrame) -> pd.DataFrame:
 def _load_from_supabase() -> pd.DataFrame:
     """PoC専用テーブル poc_ikebukuro_items を anon キーで全件取得（1000行ページ）。"""
     cols = ("visit_id,store_id,receipt_no,party_size,visit_start,order_id,order_seq,"
-            "line_index,ordered_at,item_name,category,fd,quantity,unit_price")
+            "line_index,ordered_at,item_name,category,fd,quantity,unit_price,"
+            "customer_layer,customer_layer2")
     hdr = {"apikey": _SUPA_KEY, "Authorization": f"Bearer {_SUPA_KEY}"}
     rows: list[dict] = []
     off = 0
@@ -168,8 +169,14 @@ def build(force: bool = False) -> pd.DataFrame:
     vs["party_size"] = pd.to_numeric(vs["party_size"], errors="coerce").fillna(0).astype(int)
     vs["visit_start"] = pd.to_datetime(vs["visit_start"], errors="coerce")
 
+    # 客層1(年代)=customer_layer / 客層2(利用シーン)=customer_layer2。
+    # 旧CSVに customer_layer2 が無い場合もあるため欠損列を補う。
+    for _c in ("customer_layer", "customer_layer2"):
+        if _c not in vs.columns:
+            vs[_c] = pd.NA
     df = oi.merge(
-        vs[["visit_id", "store_id", "receipt_no", "party_size", "visit_start"]],
+        vs[["visit_id", "store_id", "receipt_no", "party_size", "visit_start",
+            "customer_layer", "customer_layer2"]],
         on=["visit_id", "store_id"], how="inner",
     )
     df = df[df["line_type"] == "M"]                                   # 実注文品のみ（S=無料オプション除外）
@@ -190,6 +197,7 @@ def build(force: bool = False) -> pd.DataFrame:
         "visit_id", "store_id", "receipt_no", "party_size", "visit_start",
         "order_id", "order_seq", "line_index", "ordered_at",
         "item_name", "category", "fd", "quantity", "unit_price",
+        "customer_layer", "customer_layer2",
     ]].reset_index(drop=True)
     out = _drop_excluded(out)   # 宴会系(「宴」)を除外
 

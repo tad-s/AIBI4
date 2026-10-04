@@ -21,8 +21,15 @@ CREATE TABLE IF NOT EXISTS public.poc_ikebukuro_items (
     category     text,          -- ドリンク/揚げ物/串/海鮮/鍋/サラダ/ヘビー/軽いつまみ/締め/デザート/その他
     fd           text,          -- 'ドリンク' or 'フード'
     quantity     numeric,
-    unit_price   numeric
+    unit_price   numeric,
+    -- 2026-10-05 追加（9月データ投入時）。客層マスタのコード。00=未登録。
+    customer_layer  text,        -- 客層1 = 年代（01=20~30代/02=30~40代/03=40~50代/04=50~60代/05=その他 ※並び順は要提供元確認）
+    customer_layer2 text         -- 客層2 = 利用シーン（サラリーマン/会合/友人/学生/その他）。現状データは全'00'=未収集
 );
+
+-- 既存テーブルへの後付け（投入済み環境向け）:
+-- ALTER TABLE public.poc_ikebukuro_items ADD COLUMN IF NOT EXISTS customer_layer  text;
+-- ALTER TABLE public.poc_ikebukuro_items ADD COLUMN IF NOT EXISTS customer_layer2 text;
 
 -- v9 は anon キーで参照するため、読み取りを許可する
 ALTER TABLE public.poc_ikebukuro_items ENABLE ROW LEVEL SECURITY;

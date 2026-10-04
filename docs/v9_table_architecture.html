@@ -128,7 +128,7 @@
         <p class="ui">UI: 「🍶 テング池袋東口店 PoC分析」ボタン</p>
         <dl>
           <dt>データ源</dt><dd><span class="key">専用1テーブル</span> poc_ikebukuro_items</dd>
-          <dt>対象</dt><dd>池袋東口店のみ・2026/3〜5</dd>
+          <dt>対象</dt><dd>池袋東口店のみ・2026/3〜5 ＋ 9/1〜9/9</dd>
           <dt>粒度</dt><dd>明細（<span class="key">オーダー粒度を保持</span>）</dd>
           <dt>カテゴリ</dt><dd><span class="key">列に保存済み</span>（作り置き）</dd>
           <dt>時刻</dt><dd>UTC格納（JST=UTC+9の正しいinstant）</dd>
@@ -302,7 +302,7 @@
           <text x="601" y="143" fill="var(--poc)" font-weight="700">↑ オーダー粒度を保持</text>
           <text x="601" y="165">item_name · category · fd</text>
           <text x="601" y="184" fill="var(--poc)" font-weight="700">↑ カテゴリを列に保存</text>
-          <text x="601" y="206" fill="var(--muted)">56,728行 · JST格納 · RLS SELECT</text>
+          <text x="601" y="206" fill="var(--muted)">61,700行 · JST格納 · RLS SELECT</text>
         </g>
 
         <path d="M190 148 L285 148" stroke="var(--poc)" stroke-width="1.6" fill="none" marker-end="url(#aPoc)"/>
@@ -315,7 +315,7 @@
 
   <div class="tablewrap">
     <table>
-      <caption>poc_ikebukuro_items <span class="n">除外適用済み・order粒度・56,728行</span></caption>
+      <caption>poc_ikebukuro_items <span class="n">除外適用済み・order粒度・61,700行（3-5月56,728＋9月4,972）</span></caption>
       <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
       <tbody>
         <tr><td class="col">id<span class="pk">PK</span></td><td class="typ">bigint identity</td><td>連番</td></tr>
@@ -333,6 +333,8 @@
         <tr class="hot"><td class="col">fd</td><td class="typ">text</td><td>ドリンク / フード</td></tr>
         <tr><td class="col">quantity</td><td class="typ">numeric</td><td>数量</td></tr>
         <tr><td class="col">unit_price</td><td class="typ">numeric</td><td>単価</td></tr>
+        <tr><td class="col">customer_layer</td><td class="typ">text</td><td>客層1=<strong>年代</strong>（00=未登録/01-05）。9月〜。3-5月はNULL</td></tr>
+        <tr><td class="col">customer_layer2</td><td class="typ">text</td><td>客層2=<strong>利用シーン</strong>（現状全'00'=未収集）</td></tr>
       </tbody>
     </table>
   </div>
@@ -390,7 +392,7 @@
       <tr><td class="lbl">構造</td><td>正規化スター（4テーブル＋天気2）</td><td>非正規化フラット1枚</td></tr>
       <tr><td class="lbl">テーブル</td><td><span style="font-family:var(--mono);font-size:12px">stores / visits / orders / order_items</span></td><td><span style="font-family:var(--mono);font-size:12px">poc_ikebukuro_items</span></td></tr>
       <tr><td class="lbl">取得方法</td><td>RPC <code>get_izakaya_sales</code>（結合・DISTINCT ON）</td><td>テーブル全件 SELECT（結合なし）</td></tr>
-      <tr><td class="lbl">対象</td><td>全店舗（分析対象15店舗）</td><td>池袋東口店のみ・2026/3〜5</td></tr>
+      <tr><td class="lbl">対象</td><td>全店舗（分析対象15店舗）</td><td>池袋東口店のみ・2026/3〜5＋9/1〜9/9</td></tr>
       <tr><td class="lbl">1行の単位</td><td>来店 × 商品</td><td>明細（order粒度）</td></tr>
       <tr><td class="lbl">オーダー粒度</td><td><span class="hot" style="color:var(--danger)">消失（order_id / order_seq 無し）</span></td><td><span class="hot">保持（同時=order_id / 連続=order_seq）</span></td></tr>
       <tr><td class="lbl">カテゴリ</td><td>実行時にその場で計算（列に無い）</td><td>列に保存済み（作り置き・編集可）</td></tr>
