@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIBI Nexus — AI BI Platform Rebuild Mockup</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #F6F3EC;
+      --bg-2: #ECE7DC;
+      --surface: #FFFFFF;
+      --surface-2: #FBFAF7;
+      --ink: #16141F;
+      --ink-2: #474158;
+      --muted: #8A8496;
+      --line: #E4DED2;
+      --line-2: #CFC5B5;
+      --purple: #5B4BE7;
+      --purple-2: #8E7CFF;
+      --purple-soft: #EFECFF;
+      --green: #1E8A5E;
+      --green-soft: #E6F6EE;
+      --amber: #B7791F;
+      --amber-soft: #FFF5DB;
+      --red: #C24141;
+      --red-soft: #FDECEC;
+      --blue: #1476B8;
+      --blue-soft: #E8F3FB;
+      --shadow-sm: 0 1px 4px rgba(29, 24, 40, .07);
+      --shadow: 0 8px 26px rgba(29, 24, 40, .10);
+      --radius-sm: 10px;
+      --radius: 16px;
+      --radius-lg: 24px;
+      --nav: 76px;
+      --assistant: 340px;
+      font-family: Inter, "Segoe UI", "Noto Sans JP", system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.45;
+    }
+
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { display: grid; grid-template-columns: var(--nav) 1fr var(--assistant); }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .rail {
+      background: #191624;
+      color: #F8F6F0;
+      border-right: 1px solid rgba(255,255,255,.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px 10px;
+      gap: 8px;
+    }
+    .brand {
+      width: 46px; height: 46px;
+      border-radius: 15px;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--purple), #E17C62);
+      color: #fff; font-weight: 900; letter-spacing: -.8px;
+      box-shadow: 0 10px 24px rgba(91,75,231,.30);
+      margin-bottom: 12px;
+    }
+    .nav-btn {
+      width: 48px; height: 48px;
+      border: 0;
+      border-radius: 15px;
+      background: transparent;
+      color: rgba(255,255,255,.55);
+      display: grid; place-items: center;
+      font-size: 19px;
+      position: relative;
+      transition: .15s ease;
+    }
+    .nav-btn:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.92); }
+    .nav-btn.active { background: #fff; color: var(--purple); box-shadow: 0 8px 20px rgba(0,0,0,.22); }
+    .nav-label {
+      position: absolute; left: 58px; top: 50%; transform: translateY(-50%);
+      background: #191624; color: #fff;
+      padding: 6px 10px; border-radius: 8px;
+      white-space: nowrap; font-size: 11px; font-weight: 700;
+      opacity: 0; pointer-events: none; transition: .12s ease; z-index: 20;
+      box-shadow: var(--shadow);
+    }
+    .nav-btn:hover .nav-label { opacity: 1; }
+    .rail-spacer { flex: 1; }
+    .avatar {
+      width: 42px; height: 42px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, #F3B37D, var(--purple));
+      color: #fff; font-weight: 800;
+    }
+
+    .workspace {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: 64px 1fr;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .topbar {
+      background: rgba(255,255,255,.76);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 22px;
+      z-index: 5;
+    }
+    .workspace-title { min-width: 220px; }
+    .workspace-title b { display: block; font-size: 14px; }
+    .workspace-title span { display: block; font-size: 11px; color: var(--muted); }
+    .global-search {
+      flex: 1;
+      position: relative;
+    }
+    .global-search input {
+      width: 100%;
+      height: 40px;
+      border: 1.5px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--ink);
+      padding: 0 44px 0 42px;
+      outline: none;
+      transition: .15s ease;
+    }
+    .global-search input:focus { border-color: var(--purple); background: #fff; box-shadow: 0 0 0 4px rgba(91,75,231,.09); }
+    .global-search::before { content: "⌘"; position: absolute; left: 16px; top: 9px; color: var(--muted); font-weight: 800; }
+    .shortcut {
+      position: absolute; right: 12px; top: 9px;
+      font-size: 11px; color: var(--muted);
+      border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px;
+      background: #fff;
+    }
+    .top-actions { display: flex; gap: 8px; align-items: center; }
+    .btn {
+      border: 0;
+      border-radius: 12px;
+      padding: 9px 14px;
+      font-weight: 800;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: .15s ease;
+    }
+    .btn.primary { background: var(--purple); color: #fff; box-shadow: 0 6px 16px rgba(91,75,231,.25); }
+    .btn.primary:hover { background: #493BC7; }
+    .btn.ghost { background: #fff; color: var(--ink-2); border: 1.5px solid var(--line); }
+    .btn.ghost:hover { border-color: var(--purple); color: var(--purple); }
+
+    .stage {
+      overflow-y: auto;
+      padding: 24px;
+    }
+    .stage::-webkit-scrollbar, .assistant::-webkit-scrollbar { width: 8px; }
+    .stage::-webkit-scrollbar-thumb, .assistant::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 999px; }
+    .page { display: none; flex-direction: column; gap: 18px; animation: fade .16s ease; }
+    .page.active { display: flex; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    .page-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 2px;
+    }
+    .page-title h1 { font-size: 28px; letter-spacing: -.8px; line-height: 1.15; }
+    .page-title p { margin-top: 7px; color: var(--ink-2); font-size: 13px; }
+    .head-spacer { flex: 1; }
+    .seg {
+      display: flex; gap: 4px; padding: 4px; border-radius: 14px;
+      background: var(--bg-2); border: 1px solid var(--line);
+    }
+    .seg span {
+      border-radius: 10px; padding: 6px 10px; font-size: 11px;
+      color: var(--muted); font-weight: 800;
+    }
+    .seg span.active { background: #fff; color: var(--purple); box-shadow: var(--shadow-sm); }
+
+    .grid { display: grid; gap: 14px; }
+    .cols-2 { grid-template-columns: 1.4fr .9fr; }
+    .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 16px;
+    }
+    .card-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 14px;
+    }
+    .card-title { font-weight: 900; font-size: 14px; letter-spacing: -.1px; }
+    .card-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .card-menu { margin-left: auto; color: var(--muted); }
+
+    .kpi {
+      min-height: 138px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi::after {
+      content: "";
+      position: absolute; right: -30px; top: -40px;
+      width: 120px; height: 120px; border-radius: 50%;
+      background: var(--purple-soft); opacity: .7;
+    }
+    .kpi-label { color: var(--muted); font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+    .kpi-value { font-size: 31px; font-weight: 950; letter-spacing: -1.2px; z-index: 1; }
+    .kpi-meta { display: flex; gap: 8px; align-items: center; color: var(--ink-2); font-size: 12px; z-index: 1; }
+    .delta { font-weight: 900; border-radius: 999px; padding: 3px 8px; font-size: 11px; }
+    .delta.up { background: var(--green-soft); color: var(--green); }
+    .delta.down { background: var(--red-soft); color: var(--red); }
+    .delta.warn { background: var(--amber-soft); color: var(--amber); }
+
+    .insight-list { display: grid; gap: 10px; }
+    .insight {
+      display: grid;
+      grid-template-columns: 34px 1fr auto;
+      gap: 11px;
+      align-items: start;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface-2);
+      padding: 12px;
+    }
+    .insight-icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      display: grid; place-items: center;
+      background: var(--purple-soft);
+    }
+    .insight b { display: block; font-size: 13px; }
+    .insight p { color: var(--ink-2); font-size: 11px; margin-top: 4px; }
+    .confidence {
+      font-size: 10px; font-weight: 900; border-radius: 999px;
+      background: var(--green-soft); color: var(--green); padding: 4px 8px;
+      white-space: nowrap;
+    }
+
+    .chart-card { min-height: 310px; }
+    .chart-wrap { height: 232px; margin-top: 8px; background: linear-gradient(180deg, #fff 0%, var(--surface-2) 100%); border-radius: 14px; border: 1px solid var(--line); padding: 12px; }
+    .chart-wrap svg { width: 100%; height: 100%; display: block; }
+    .metric-pills { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid var(--line); background: #fff; color: var(--ink-2);
+      border-radius: 999px; padding: 5px 9px; font-size: 11px; font-weight: 800;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--purple); display: inline-block; }
+    .dot.green { background: var(--green); }
+    .dot.amber { background: var(--amber); }
+    .dot.red { background: var(--red); }
+
+    .action-queue { display: grid; gap: 10px; }
+    .action {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: #fff;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .action-check {
+      width: 22px; height: 22px; border-radius: 7px;
+      border: 1.5px solid var(--line-2);
+      margin-top: 1px;
+    }
+    .action-body { flex: 1; }
+    .action-body b { font-size: 12px; display: block; }
+    .action-body span { color: var(--muted); font-size: 11px; }
+
+    .ask-layout { display: grid; grid-template-columns: 1fr 330px; gap: 14px; min-height: 640px; }
+    .chat-canvas {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+    .chat-head {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex; gap: 10px; align-items: center;
+      background: linear-gradient(90deg, #fff, var(--purple-soft));
+    }
+    .chat-stream { padding: 18px; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+    .message {
+      max-width: 82%;
+      border-radius: 18px;
+      padding: 13px 15px;
+      font-size: 13px;
+      box-shadow: var(--shadow-sm);
+    }
+    .message.user { margin-left: auto; background: var(--purple); color: #fff; border-bottom-right-radius: 6px; }
+    .message.ai { background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+    .answer-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: #fff;
+      margin-top: 10px;
+    }
+    .answer-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .answer-title { font-weight: 900; }
+    .trace {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .trace-item { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 9px; }
+    .trace-label { color: var(--muted); font-size: 10px; font-weight: 900; text-transform: uppercase; }
+    .trace-value { color: var(--ink); font-size: 11px; margin-top: 4px; font-weight: 800; }
+    .sql-box {
+      margin-top: 10px;
+      background: #181623;
+      color: #E9E3FF;
+      border-radius: 12px;
+      padding: 11px 12px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 11px;
+      overflow: auto;
+    }
+    .prompt-row {
+      padding: 14px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      gap: 10px;
+      background: #fff;
+    }
+    .prompt-row input {
+      flex: 1; border: 1.5px solid var(--line); border-radius: 14px;
+      padding: 10px 12px; outline: none;
+    }
+    .prompt-row input:focus { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(91,75,231,.09); }
+    .context-panel { display: grid; gap: 14px; align-content: start; }
+
+    .connector-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(188px, 1fr)); gap: 12px; }
+    .connector {
+      min-height: 150px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: #fff;
+      padding: 14px;
+      box-shadow: var(--shadow-sm);
+      transition: .15s ease;
+      position: relative;
+    }
+    .connector:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--purple); }
+    .conn-icon { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--purple-soft); margin-bottom: 10px; }
+    .conn-title { font-weight: 900; font-size: 13px; }
+    .conn-desc { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.45; }
+    .conn-foot { position: absolute; left: 14px; right: 14px; bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+    .badge {
+      font-size: 10px; font-weight: 900; border-radius: 999px; padding: 4px 8px;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .badge.ok { background: var(--green-soft); color: var(--green); }
+    .badge.warn { background: var(--amber-soft); color: var(--amber); }
+    .badge.err { background: var(--red-soft); color: var(--red); }
+    .badge.ai { background: var(--purple-soft); color: var(--purple); }
+    .link { color: var(--purple); font-size: 11px; font-weight: 900; }
+
+    .table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: var(--shadow-sm);
+    }
+    .table th, .table td {
+      text-align: left;
+      padding: 11px 13px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      vertical-align: middle;
+    }
+    .table th { background: var(--surface-2); color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .7px; }
+    .table tr:last-child td { border-bottom: 0; }
+    .table td b { font-size: 12px; }
+    .mini-bar { height: 7px; background: var(--bg-2); border-radius: 999px; overflow: hidden; min-width: 74px; }
+    .mini-bar span { display: block; height: 100%; background: var(--green); border-radius: inherit; }
+
+    .model-layout { display: grid; grid-template-columns: 290px 1fr; gap: 14px; }
+    .source-list { display: grid; gap: 8px; }
+    .source-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+    .source-row.active { border-color: var(--purple); background: var(--purple-soft); }
+    .source-row .conn-icon { margin: 0; width: 34px; height: 34px; }
+    .field-grid { display: grid; gap: 10px; }
+    .field-row {
+      display: grid;
+      grid-template-columns: 42px 1fr 130px 110px 120px 1fr;
+      gap: 10px;
+      align-items: center;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+    }
+    .toggle {
+      width: 34px; height: 20px; border-radius: 999px; background: var(--line-2); position: relative;
+    }
+    .toggle::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+    .toggle.on { background: var(--purple); }
+    .toggle.on::after { left: 16px; }
+    .field-input {
+      border: 1.5px solid transparent;
+      border-radius: 10px;
+      padding: 6px 8px;
+      background: transparent;
+      width: 100%;
+      outline: none;
+      font-weight: 800;
+      color: var(--ink);
+    }
+    .field-input:hover, .field-input:focus { border-color: var(--purple); background: #fff; }
+    .code { font-family: Consolas, Monaco, monospace; color: var(--muted); font-size: 11px; }
+
+    .canvas {
+      min-height: 250px;
+      border: 1.5px dashed var(--line-2);
+      border-radius: var(--radius);
+      background: radial-gradient(circle at 1px 1px, rgba(91,75,231,.13) 1px, transparent 0);
+      background-size: 22px 22px;
+      padding: 18px;
+      position: relative;
+    }
+    .entity {
+      width: 170px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow-sm);
+      padding: 11px;
+      position: absolute;
+    }
+    .entity b { display: block; font-size: 12px; }
+    .entity span { display: block; color: var(--muted); font-size: 10px; margin-top: 4px; }
+    .line {
+      position: absolute;
+      height: 2px;
+      background: var(--purple);
+      transform-origin: left center;
+      opacity: .55;
+    }
+
+    .worksheet {
+      display: grid;
+      grid-template-columns: 270px 1fr;
+      gap: 14px;
+      min-height: 600px;
+    }
+    .builder-group { margin-bottom: 14px; }
+    .builder-title { font-size: 10px; color: var(--muted); font-weight: 900; text-transform: uppercase; margin-bottom: 7px; }
+    .dropzone {
+      min-height: 38px;
+      border: 1.5px dashed var(--line-2);
+      background: var(--surface-2);
+      border-radius: 12px;
+      padding: 8px;
+      display: flex; gap: 6px; flex-wrap: wrap;
+    }
+    .chip {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--ink-2);
+      box-shadow: var(--shadow-sm);
+    }
+    .sheet {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .sheet-toolbar {
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      background: var(--surface-2);
+    }
+    .cell-grid {
+      display: grid;
+      grid-template-columns: 52px repeat(6, 1fr);
+      font-size: 12px;
+    }
+    .cell {
+      min-height: 38px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 9px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .cell.head, .cell.rowhead { background: var(--surface-2); color: var(--muted); font-weight: 900; font-size: 10px; text-transform: uppercase; }
+    .cell.total { background: var(--purple-soft); font-weight: 900; color: var(--purple); }
+
+    .report-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .report-card {
+      min-height: 210px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .report-thumb {
+      height: 112px;
+      background:
+        linear-gradient(135deg, rgba(91,75,231,.20), transparent),
+        radial-gradient(circle at 80% 10%, rgba(30,138,94,.18), transparent 28%),
+        var(--surface-2);
+      border-bottom: 1px solid var(--line);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .thumb-block { background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+    .report-body { padding: 13px; }
+    .report-body b { display: block; }
+    .report-body p { color: var(--muted); font-size: 11px; margin-top: 5px; }
+
+    .automation-flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+    .flow-step {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      padding: 14px;
+      position: relative;
+      min-height: 145px;
+    }
+    .flow-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -18px;
+      top: 52px;
+      color: var(--line-2);
+      font-size: 22px;
+      z-index: 2;
+    }
+    .flow-num { color: var(--purple); font-size: 11px; font-weight: 950; }
+    .flow-step b { display: block; margin-top: 8px; }
+    .flow-step p { color: var(--muted); font-size: 11px; margin-top: 6px; }
+
+    .assistant {
+      height: 100vh;
+      overflow-y: auto;
+      background: rgba(255,255,255,.82);
+      border-left: 1px solid var(--line);
+      backdrop-filter: blur(16px);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 14px;
+    }
+    .assistant-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .ai-mark {
+      width: 40px; height: 40px; border-radius: 14px;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--purple), var(--purple-2));
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(91,75,231,.25);
+    }
+    .assistant-head b { display: block; }
+    .assistant-head span { color: var(--muted); font-size: 11px; }
+    .ai-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+    .ai-card h3 { font-size: 13px; margin-bottom: 10px; }
+    .prompt-chip {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--ink-2);
+      border-radius: 12px;
+      padding: 9px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 7px;
+    }
+    .prompt-chip:hover { border-color: var(--purple); color: var(--purple); background: var(--purple-soft); }
+    .grounding-list { display: grid; gap: 8px; }
+    .grounding-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: 11px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .grounding-item:last-child { border-bottom: 0; }
+    .risk-meter {
+      height: 9px; border-radius: 999px; background: var(--bg-2); overflow: hidden;
+    }
+    .risk-meter span { display: block; height: 100%; background: linear-gradient(90deg, var(--green), var(--amber), var(--red)); width: 31%; }
+
+    @media (max-width: 1280px) {
+      body { grid-template-columns: var(--nav) 1fr; }
+      .assistant { display: none; }
+      .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cols-2, .ask-layout, .model-layout, .worksheet { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="rail" aria-label="Primary navigation">
+    <div class="brand">AI</div>
+    <button class="nav-btn active" data-page="home">🏠<span class="nav-label">Home</span></button>
+    <button class="nav-btn" data-page="ask">✨<span class="nav-label">Ask AI</span></button>
+    <button class="nav-btn" data-page="data">🔌<span class="nav-label">Data Hub</span></button>
+    <button class="nav-btn" data-page="model">🧩<span class="nav-label">Model</span></button>
+    <button class="nav-btn" data-page="explore">📊<span class="nav-label">Explore</span></button>
+    <button class="nav-btn" data-page="reports">📚<span class="nav-label">Reports</span></button>
+    <button class="nav-btn" data-page="automations">⚡<span class="nav-label">Automations</span></button>
+    <button class="nav-btn" data-page="governance">🛡️<span class="nav-label">Governance</span></button>
+    <div class="rail-spacer"></div>
+    <button class="nav-btn" data-page="settings">⚙️<span class="nav-label">Settings</span></button>
+    <div class="avatar">T</div>
+  </nav>
+
+  <section class="workspace">
+    <header class="topbar">
+      <div class="workspace-title">
+        <b>AIBI Nexus</b>
+        <span>AI-native analytics workspace / Demo tenant</span>
+      </div>
+      <div class="global-search">
+        <input id="globalSearch" placeholder="売上低下の原因、同期エラー、指標定義、レポートを横断検索…">
+        <span class="shortcut">K</span>
+      </div>
+      <div class="top-actions">
+        <button class="btn ghost">🔄 同期</button>
+        <button class="btn ghost">👥 共有</button>
+        <button class="btn primary" onclick="openAskWithPrompt('今週見るべき変化点を3つ教えて')">✨ AIに聞く</button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <section class="page active" id="page-home">
+        <div class="page-head">
+          <div class="page-title">
+            <h1>今日の意思決定ボード</h1>
+            <p>複数SaaS・DB・ファイルを横断し、AIが「変化点・原因・次のアクション」を先に提示します。</p>
+          </div>
+          <div class="head-spacer"></div>
+          <div class="seg"><span>日次</span><span class="active">週次</span><span>月次</span></div>
+        </div>
+
+        <div class="grid cols-4">
+          <div class="card kpi">
+            <div class="kpi-label">Revenue</div>
+            <div class="kpi-value">¥184.2M</div>
+            <div class="kpi-meta"><span class="delta up">+12.4%</span> Shopify + Stripe + Salesforce</div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Gross Margin</div>
+            <div class="kpi-value">42.8%</div>
+            <div class="kpi-meta"><span class="delta warn">-1.9pt</span> 原価率上昇を検知</div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Pipeline</div>
+            <div class="kpi-value">¥92.7M</div>
+            <div class="kpi-meta"><span class="delta up">+8.1%</span> Salesforce</div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Data Health</div>
+            <div class="kpi-value">96</div>
+            <div class="kpi-meta"><span class="delta down">2 issues</span> Slack / Oracle</div>
+          </div>
+        </div>
+
+        <div class="grid cols-2">
+          <div class="card chart-card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">経営指標トレンド</div>
+                <div class="card-sub">AIが検出した変化点をグラフ上に注釈表示</div>
+              </div>
+              <div class="card-menu">⋯</div>
+            </div>
+            <div class="chart-wrap">
+              <svg viewBox="0 0 720 230" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="areaPurple" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#5B4BE7" stop-opacity=".25"/>
+                    <stop offset="100%" stop-color="#5B4BE7" stop-opacity="0"/>
+                  </linearGradient>
+                  <linearGradient id="areaGreen" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#1E8A5E" stop-opacity=".18"/>
+                    <stop offset="100%" stop-color="#1E8A5E" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <line x1="0" y1="42" x2="720" y2="42" stroke="#E4DED2"/>
+                <line x1="0" y1="92" x2="720" y2="92" stroke="#E4DED2"/>
+                <line x1="0" y1="142" x2="720" y2="142" stroke="#E4DED2"/>
+                <line x1="0" y1="192" x2="720" y2="192" stroke="#E4DED2"/>
+                <path d="M0,168 C70,154 128,145 190,136 C276,123 336,100 410,97 C510,94 570,78 720,52 L720,230 L0,230 Z" fill="url(#areaPurple)"/>
+                <path d="M0,179 C80,174 144,160 210,158 C300,155 360,132 444,128 C540,125 610,115 720,102 L720,230 L0,230 Z" fill="url(#areaGreen)"/>
+                <path d="M0,168 C70,154 128,145 190,136 C276,123 336,100 410,97 C510,94 570,78 720,52" fill="none" stroke="#5B4BE7" stroke-width="3"/>
+                <path d="M0,179 C80,174 144,160 210,158 C300,155 360,132 444,128 C540,125 610,115 720,102" fill="none" stroke="#1E8A5E" stroke-width="2.4"/>
+                <circle cx="410" cy="97" r="6" fill="#5B4BE7" stroke="#fff" stroke-width="3"/>
+                <circle cx="610" cy="115" r="5" fill="#1E8A5E" stroke="#fff" stroke-width="3"/>
+                <rect x="430" y="66" width="176" height="42" rx="10" fill="#fff" stroke="#E4DED2"/>
+                <text x="444" y="85" font-size="11" font-weight="700" fill="#16141F">広告経由売上 +18.2%</text>
+                <text x="444" y="101" font-size="9" fill="#8A8496">GA4 + Shopify の寄与が最大</text>
+              </svg>
+            </div>
+            <div class="metric-pills">
+              <span class="pill"><span class="dot"></span> 売上</span>
+              <span class="pill"><span class="dot green"></span> 粗利</span>
+              <span class="pill"><span class="dot amber"></span> AI注釈</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">AI が検出した変化点</div>
+                <div class="card-sub">根拠データ・信頼度・推奨アクション付き</div>
+              </div>
+            </div>
+            <div class="insight-list">
+              <div class="insight">
+                <div class="insight-icon">📈</div>
+                <div><b>Shopifyの新規顧客売上が前週比 +22%</b><p>GA4の有料検索流入増加と一致。広告キャンペーンID `SPRING-26` が主因。</p></div>
+                <span class="confidence">94%</span>
+              </div>
+              <div class="insight">
+                <div class="insight-icon">⚠️</div>
+                <div><b>Oracle受注データの欠損が増加</b><p>出荷日がNULLの行が通常の3.2倍。ETLではなく上流入力の可能性。</p></div>
+                <span class="confidence">88%</span>
+              </div>
+              <div class="insight">
+                <div class="insight-icon">💬</div>
+                <div><b>Slack問い合わせ増加が解約兆候と相関</b><p>サポートチャンネル投稿数が多い顧客で翌月MRR減少率が高い。</p></div>
+                <span class="confidence">81%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid cols-2">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">次に取るべきアクション</div>
+                <div class="card-sub">AI提案をタスク化・Slack通知・Webhook実行に昇格できます</div>
+              </div>
+            </div>
+            <div class="action-queue">
+              <div class="action"><div class="action-check"></div><div class="action-body"><b>広告キャンペーン `SPRING-26` の配分を確認</b><span>売上寄与が高く、粗利低下は許容範囲。マーケ担当へ共有推奨。</span></div><span class="badge ai">AI提案</span></div>
+              <div class="action"><div class="action-check"></div><div class="action-body"><b>Oracleの出荷日NULL行を上流担当へ確認</b><span>対象 412 行。レポート数値に影響するため優先度高。</span></div><span class="badge warn">要確認</span></div>
+              <div class="action"><div class="action-check"></div><div class="action-body"><b>Slack問い合わせ急増顧客のヘルススコアを更新</b><span>HubSpot のリスクタグ付与ルールに追加候補。</span></div><span class="badge ok">自動化可</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">データパイプライン状態</div>
+                <div class="card-sub">同期、品質、セマンティック準備状況</div>
+              </div>
+            </div>
+            <table class="table">
+              <thead><tr><th>Source</th><th>Status</th><th>Quality</th><th>Updated</th></tr></thead>
+              <tbody>
+                <tr><td><b>Stripe</b><br><span class="card-sub">Payments</span></td><td><span class="badge ok">Live</span></td><td><div class="mini-bar"><span style="width:98%"></span></div></td><td>3分前</td></tr>
+                <tr><td><b>Shopify</b><br><span class="card-sub">Orders</span></td><td><span class="badge ok">Live</span></td><td><div class="mini-bar"><span style="width:96%"></span></div></td><td>4分前</td></tr>
+                <tr><td><b>Oracle</b><br><span class="card-sub">ERP</span></td><td><span class="badge warn">Warning</span></td><td><div class="mini-bar"><span style="width:76%;background:var(--amber)"></span></div></td><td>27分前</td></tr>
+                <tr><td><b>Slack</b><br><span class="card-sub">Messages</span></td><td><span class="badge ok">Live</span></td><td><div class="mini-bar"><span style="width:91%"></span></div></td><td>9分前</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-ask">
+        <div class="page-head">
+          <div class="page-title">
+            <h1>Ask AI</h1>
+            <p>自然言語で探索し、回答の根拠・使用データ・SQL/式・信頼度を確認します。</p>
+          </div>
+          <div class="head-spacer"></div>
+          <button class="btn ghost">履歴</button>
+          <button class="btn primary">新しい質問</button>
+        </div>
+
+        <div class="ask-layout">
+          <div class="chat-canvas">
+            <div class="chat-head">
+              <div class="ai-mark">✨</div>
+              <div><b>Grounded Analysis</b><div class="card-sub">使用モデル: Revenue Semantic Model / 権限: Finance Manager</div></div>
+            </div>
+            <div class="chat-stream" id="chatStream">
+              <div class="message user">先月、粗利率が下がった最大要因は？データソースも出して。</div>
+              <div class="message ai">
+                最大要因は Shopify 注文における割引率上昇です。特に `SPRING-26` キャンペーンが売上を押し上げる一方、粗利率を 1.4pt 押し下げています。
+                <div class="answer-card">
+                  <div class="answer-top">
+                    <div class="answer-title">粗利率低下ドライバー</div>
+                    <span class="confidence">信頼度 91%</span>
+                  </div>
+                  <div class="trace">
+                    <div class="trace-item"><div class="trace-label">Data</div><div class="trace-value">Shopify + Stripe + freee</div></div>
+                    <div class="trace-item"><div class="trace-label">Metric</div><div class="trace-value">Gross Margin %</div></div>
+                    <div class="trace-item"><div class="trace-label">Filter</div><div class="trace-value">2026-06 / Paid Orders</div></div>
+                  </div>
+                  <div class="sql-box">SELECT campaign_id, SUM(discount_amount), AVG(gross_margin_rate)
+FROM semantic_orders
+WHERE order_month = '2026-06'
+GROUP BY campaign_id
+ORDER BY margin_impact ASC;</div>
+                </div>
+              </div>
+            </div>
+            <div class="prompt-row">
+              <input id="askInput" placeholder="例: Slack問い合わせがMRR解約に与える影響を見せて">
+              <button class="btn primary" onclick="sendMockQuestion()">送信</button>
+            </div>
+          </div>
+
+          <div class="context-panel">
+            <div class="card">
+              <div class="card-header">
+                <div><div class="card-title">現在の分析コンテキスト</div><div class="card-sub">AI回答のスコープ</div></div>
+              </div>
+              <div class="grounding-list">
+                <div class="grounding-item"><span>Semantic model</span><b>Revenue v3</b></div>
+                <div class="grounding-item"><span>Verified metrics</span><b>14</b></div>
+                <div class="grounding-item"><span>Row-level security</span><b>有効</b></div>
+                <div class="grounding-item"><span>Freshness</span><b>9分前</b></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div><div class="card-title">おすすめ質問</div></div></div>
+              <button class="prompt-chip" onclick="setAskPrompt(this.textContent)">今週の異常値を重要度順に並べて</button>
+              <button class="prompt-chip" onclick="setAskPrompt(this.textContent)">売上増加と問い合わせ増加の相関を見たい</button>
+              <button class="prompt-chip" onclick="setAskPrompt(this.textContent)">粗利率が高い顧客セグメントを教えて</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-data">
+        <div class="page-head">
+          <div class="page-title">
+            <h1>Data Hub</h1>
+            <p>SaaS、DB、REST API、CSV/PDF/画像を接続し、同期・品質・権限を管理します。</p>
+          </div>
+          <div class="head-spacer"></div>
+          <button class="btn ghost">接続テスト</button>
+          <button class="btn primary">＋ データソース追加</button>
+        </div>
+
+        <div class="connector-grid">
+          <div class="connector"><div class="conn-icon">☁️</div><div class="conn-title">Salesforce</div><div class="conn-desc">商談・活動・取引先</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">🟠</div><div class="conn-title">HubSpot</div><div class="conn-desc">リード・メール・MA</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">📈</div><div class="conn-title">Google Analytics 4</div><div class="conn-desc">流入・イベント・CV</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">🛒</div><div class="conn-title">Shopify</div><div class="conn-desc">注文・顧客・商品</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">💳</div><div class="conn-title">Stripe</div><div class="conn-desc">決済・請求・サブスク</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">💬</div><div class="conn-title">Slack</div><div class="conn-desc">チャンネル・問い合わせ</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">📘</div><div class="conn-title">freee 会計</div><div class="conn-desc">仕訳・勘定科目・取引先</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">🟨</div><div class="conn-title">AWS RDS</div><div class="conn-desc">MySQL/PostgreSQL</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">🟥</div><div class="conn-title">Redshift</div><div class="conn-desc">DWH・イベントログ</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">🔴</div><div class="conn-title">Oracle</div><div class="conn-desc">ERP・受注・在庫</div><div class="conn-foot"><span class="badge warn">Warning</span><span class="link">修正 →</span></div></div>
+          <div class="connector"><div class="conn-icon">🔷</div><div class="conn-title">Azure Synapse</div><div class="conn-desc">集計DWH</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">🐬</div><div class="conn-title">MySQL</div><div class="conn-desc">アプリDB</div><div class="conn-foot"><span class="badge ok">Live</span><span class="link">設計 →</span></div></div>
+          <div class="connector"><div class="conn-icon">🔗</div><div class="conn-title">REST API</div><div class="conn-desc">カスタムAPI</div><div class="conn-foot"><span class="badge ai">Mapped</span><span class="link">編集 →</span></div></div>
+          <div class="connector"><div class="conn-icon">📄</div><div class="conn-title">CSV / Excel</div><div class="conn-desc">ファイル直接取込</div><div class="conn-foot"><span class="badge ok">Ready</span><span class="link">取込 →</span></div></div>
+          <div class="connector"><div class="conn-icon">📑</div><div class="conn-title">PDF OCR</div><div class="conn-desc">請求書・帳票</div><div class="conn-foot"><span class="badge ai">AI OCR</span><span class="link">取込 →</span></div></div>
+          <div class="connector"><div class="conn-icon">🖼️</div><div class="conn-title">Image Extract</div><div class="conn-desc">画像・グラフ・表</div><div class="conn-foot"><span class="badge ai">Vision</span><span class="link">取込 →</span></div></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-model">
+        <div class="page-head">
+          <div class="page-title">
+            <h1>Model / Semantic Layer</h1>
+            <p>AI回答の精度を決める中核。取り込む項目、名称、型、指標、同義語、権限を設計します。</p>
+          </div>
+          <div class="head-spacer"></div>
+          <button class="btn ghost">AIで補完</button>
+          <button class="btn primary">設計を保存</button>
+        </div>
+
+        <div class="model-layout">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">データセット</div><div class="card-sub">品質スコア順</div></div></div>
+            <div class="source-list">
+              <div class="source-row active"><div class="conn-icon">🛒</div><div><b>Shopify Orders</b><div class="card-sub">8,312 rows / 18 fields</div></div></div>
+              <div class="source-row"><div class="conn-icon">💳</div><div><b>Stripe Charges</b><div class="card-sub">3,561 rows / 14 fields</div></div></div>
+              <div class="source-row"><div class="conn-icon">📘</div><div><b>freee Deals</b><div class="card-sub">2,041 rows / 12 fields</div></div></div>
+              <div class="source-row"><div class="conn-icon">💬</div><div><b>Slack Messages</b><div class="card-sub">45,820 rows / 11 fields</div></div></div>
+              <div class="source-row"><div class="conn-icon">🔴</div><div><b>Oracle Orders</b><div class="card-sub">28,740 rows / 14 fields</div></div></div>
+            </div>
+          </div>
+
+          <div class="grid" style="gap:14px;">
+            <div class="card">
+              <div class="card-header">
+                <div><div class="card-title">項目設計 — Shopify Orders</div><div class="card-sub">項目を取り込むか選択し、AIが理解しやすい名称・型・意味を設定</div></div>
+                <div class="card-menu">10 / 14 fields active</div>
+              </div>
+              <div class="field-grid">
+                <div class="field-row"><div class="toggle on"></div><input class="field-input" value="注文ID"><span class="code">order_id</span><span class="badge ai">主キー</span><span class="badge ok">string</span><span class="card-sub">注文を一意に識別</span></div>
+                <div class="field-row"><div class="toggle on"></div><input class="field-input" value="注文日時"><span class="code">created_at</span><span class="badge ok">時間軸</span><span class="badge ok">datetime</span><span class="card-sub">JSTへ正規化</span></div>
+                <div class="field-row"><div class="toggle on"></div><input class="field-input" value="合計金額"><span class="code">total_price</span><span class="badge ai">指標候補</span><span class="badge ok">number</span><span class="card-sub">税込売上</span></div>
+                <div class="field-row"><div class="toggle on"></div><input class="field-input" value="割引金額"><span class="code">discount_amount</span><span class="badge warn">要定義</span><span class="badge ok">number</span><span class="card-sub">キャンペーン分析に使用</span></div>
+                <div class="field-row"><div class="toggle on"></div><input class="field-input" value="顧客ID"><span class="code">customer_id</span><span class="badge warn">PII注意</span><span class="badge ok">string</span><span class="card-sub">RLS対象</span></div>
+                <div class="field-row"><div class="toggle"></div><input class="field-input" value="配送先住所"><span class="code">shipping_address</span><span class="badge err">除外</span><span class="badge ok">json</span><span class="card-sub">個人情報のため初期除外</span></div>
+              </div>
+            </div>
+
+            <div class="grid cols-2">
+              <div class="card">
+                <div class="card-header"><div><div class="card-title">Metric Definitions</div><div class="card-sub">全社共通指標</div></div></div>
+                <table class="table">
+                  <thead><tr><th>Metric</th><th>Formula</th><th>Owner</th></tr></thead>
+                  <tbody>
+                    <tr><td><b>売上</b></td><td><span class="code">SUM(total_price)</span></td><td>Finance</td></tr>
+                    <tr><td><b>粗利率</b></td><td><span class="code">(sales - cogs) / sales</span></td><td>Finance</td></tr>
+                    <tr><td><b>MRR</b></td><td><span class="code">SUM(active_subscription_amount)</span></td><td>Sales Ops</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="card">
+                <div class="card-header"><div><div class="card-title">Relationship Canvas</div><div class="card-sub">AIが使う結合関係</div></div></div>
+                <div class="canvas">
+                  <div class="entity" style="left:18px;top:22px;"><b>shopify_orders</b><span>customer_id / order_id</span></div>
+                  <div class="entity" style="right:26px;top:32px;"><b>stripe_charges</b><span>order_id / charge_id</span></div>
+                  <div class="entity" style="left:150px;bottom:24px;"><b>freee_deals</b><span>partner_id / amount</span></div>
+                  <div class="line" style="left:185px;top:72px;width:160px;transform:rotate(3deg);"></div>
+                  <div class="line" style="left:140px;top:108px;width:145px;transform:rotate(58deg);"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-explore">
+        <div class="page-head">
+          <div class="page-title">
+            <h1>Explore</h1>
+            <p>SQLを書かずにピボット・表計算・チャート化。チャットの回答から1クリックで探索画面へ移動します。</p>
+          </div>
+          <div class="head-spacer"></div>
+          <button class="btn ghost">SQLを見る</button>
+          <button class="btn primary">レポートに保存</button>
+        </div>
+
+        <div class="worksheet">
+          <div class="card">
+            <div class="builder-group">
+              <div class="builder-title">Rows</div>
+              <div class="dropzone"><span class="chip">月</span><span class="chip">販売チャネル</span></div>
+            </div>
+            <div class="builder-group">
+              <div class="builder-title">Values</div>
+              <div class="dropzone"><span class="chip">売上</span><span class="chip">粗利率</span></div>
+            </div>
+            <div class="builder-group">
+              <div class="builder-title">Filters</div>
+              <div class="dropzone"><span class="chip">支払状態 = paid</span><span class="chip">キャンペーンあり</span></div>
+            </div>
+            <button class="prompt-chip">AIで別の切り口を提案</button>
+          </div>
+          <div class="sheet">
+            <div class="sheet-toolbar">
+              <span class="badge ok">Live query</span>
+              <span class="card-sub">semantic_orders から生成 / 2.1s</span>
+              <div class="head-spacer"></div>
+              <button class="btn ghost">チャート</button>
+            </div>
+            <div class="cell-grid">
+              <div class="cell head"></div><div class="cell head">Jan</div><div class="cell head">Feb</div><div class="cell head">Mar</div><div class="cell head">Apr</div><div class="cell head">May</div><div class="cell head">Jun</div>
+              <div class="cell rowhead">EC</div><div class="cell">¥21.3M</div><div class="cell">¥22.1M</div><div class="cell">¥24.8M</div><div class="cell">¥26.1M</div><div class="cell">¥28.0M</div><div class="cell total">¥31.4M</div>
+              <div class="cell rowhead">Sales</div><div class="cell">¥14.7M</div><div class="cell">¥15.0M</div><div class="cell">¥15.8M</div><div class="cell">¥16.6M</div><div class="cell">¥17.9M</div><div class="cell">¥18.3M</div>
+              <div class="cell rowhead">Partner</div><div class="cell">¥7.4M</div><div class="cell">¥8.2M</div><div class="cell">¥8.8M</div><div class="cell">¥9.0M</div><div class="cell">¥8.6M</div><div class="cell">¥9.1M</div>
+              <div class="cell rowhead">Margin</div><div class="cell">44.1%</div><div class="cell">43.7%</div><div class="cell">43.2%</div><div class="cell">42.9%</div><div class="cell">42.2%</div><div class="cell total">41.6%</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-reports">
+        <div class="page-head">
+          <div class="page-title">
+            <h1>Reports</h1>
+            <p>探索結果を共有可能なLiveboardへ。配信、埋め込み、PDF/Excel出力、AI要約付き購読に対応します。</p>
+          </div>
+          <div class="head-spacer"></div>
+          <button class="btn ghost">テンプレート</button>
+          <button class="btn primary">＋ レポート作成</button>
+        </div>
+        <div class="report-grid">
+          <div class="report-card"><div class="report-thumb"><div class="thumb-block"></div><div class="thumb-block"></div><div class="thumb-block"></div><div class="thumb-block"></div></div><div class="report-body"><b>Executive Revenue Review</b><p>毎週月曜 8:00 / Slack #exec-bi / AI要約付き</p></div></div>
+          <div class="report-card"><div class="report-thumb"><div class="thumb-block"></div><div class="thumb-block"></div><div class="thumb-block"></div><div class="thumb-block"></div></div><div class="report-body"><b>Campaign Performance</b><p>GA4 + Shopify + Stripe / Marketing 用</p></div></div>
+          <div class="report-card"><div class="report-thumb"><div class="thumb-block"></div><div class="thumb-block"></div><div class="thumb-block"></div><div class="thumb-block"></div></div><div class="report-body"><b>Customer Health</b><p>Slack + HubSpot + MRR / CS 用</p></div></div>
+          <div class="report-card"><div class="report-thumb"><div class="thumb-block"></div><div class="thumb-block"></div><div class="thumb-block"></div><div class="thumb-block"></div></div><div class="report-body"><b>Accounting Close Monitor</b><p>freee + Oracle / 経理締め監視</p></div></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-automations">
+        <div class="page-head">
+          <div class="page-title">
+            <h1>Automations</h1>
+            <p>分析結果を通知・承認・外部API実行へつなげます。ダッシュボードで止めない設計です。</p>
+          </div>
+          <div class="head-spacer"></div>
+          <button class="btn primary">＋ Agent作成</button>
+        </div>
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">MRR Risk Agent</div><div class="card-sub">問い合わせ増加・決済失敗・利用低下を検知し、SlackとHubSpotへ反映</div></div><span class="badge ok">Active</span></div>
+          <div class="automation-flow">
+            <div class="flow-step"><div class="flow-num">01 Trigger</div><b>異常検知</b><p>Slack投稿 + Stripe決済失敗 + MRR低下を毎朝確認</p></div>
+            <div class="flow-step"><div class="flow-num">02 Analyze</div><b>AI原因分類</b><p>問い合わせ本文と顧客属性から解約リスクを分類</p></div>
+            <div class="flow-step"><div class="flow-num">03 Approve</div><b>人の承認</b><p>信頼度80%未満はCSリードの承認待ちへ</p></div>
+            <div class="flow-step"><div class="flow-num">04 Act</div><b>HubSpot更新</b><p>リスクタグ付与、Slack通知、対応タスク作成</p></div>
+          </div>
+        </div>
+        <table class="table">
+          <thead><tr><th>Agent</th><th>Trigger</th><th>Action</th><th>Status</th><th>Last run</th></tr></thead>
+          <tbody>
+            <tr><td><b>Pipeline Gap</b></td><td>売上予測 -10%</td><td>Salesforce task</td><td><span class="badge ok">Active</span></td><td>12分前</td></tr>
+            <tr><td><b>Data Quality Watch</b></td><td>欠損率 5%超</td><td>Slack alert</td><td><span class="badge ok">Active</span></td><td>27分前</td></tr>
+            <tr><td><b>Campaign Budget</b></td><td>ROAS急落</td><td>承認依頼</td><td><span class="badge warn">Review</span></td><td>1時間前</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="page" id="page-governance">
+        <div class="page-head">
+          <div class="page-title">
+            <h1>Governance</h1>
+            <p>AI利用に必要な権限・PII・リネージ・監査・コストを一元管理します。</p>
+          </div>
+          <div class="head-spacer"></div>
+          <button class="btn ghost">監査ログ出力</button>
+        </div>
+        <div class="grid cols-3">
+          <div class="card"><div class="card-header"><div><div class="card-title">Security posture</div><div class="card-sub">RLS / CLS / PII</div></div><span class="badge ok">Good</span></div><div class="risk-meter"><span style="width:18%"></span></div><p class="card-sub" style="margin-top:10px;">列マスク 12件、PII列 8件、RLSルール 4件</p></div>
+          <div class="card"><div class="card-header"><div><div class="card-title">AI usage cost</div><div class="card-sub">今月</div></div><span class="badge warn">68%</span></div><div class="kpi-value" style="font-size:28px;">¥42,300</div><p class="card-sub">Ask AI 1,240回 / Agents 318回</p></div>
+          <div class="card"><div class="card-header"><div><div class="card-title">Data lineage</div><div class="card-sub">検証済みモデル</div></div><span class="badge ok">91%</span></div><div class="kpi-value" style="font-size:28px;">27</div><p class="card-sub">データセット中 25 個が完全リネージ</p></div>
+        </div>
+        <table class="table">
+          <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Object</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>10:24</td><td>tarchi</td><td>AI question</td><td>Revenue v3</td><td><span class="badge ok">Allowed</span></td></tr>
+            <tr><td>10:18</td><td>finance_ops</td><td>Metric edit</td><td>Gross Margin %</td><td><span class="badge ok">Approved</span></td></tr>
+            <tr><td>09:56</td><td>marketing</td><td>Export</td><td>Customer Health</td><td><span class="badge warn">Masked</span></td></tr>
+            <tr><td>09:21</td><td>guest</td><td>Ask PII field</td><td>shipping_address</td><td><span class="badge err">Denied</span></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="page" id="page-settings">
+        <div class="page-head">
+          <div class="page-title">
+            <h1>Settings</h1>
+            <p>ワークスペース、AIモデル、通知、APIキー、データ保持ポリシーを管理します。</p>
+          </div>
+        </div>
+        <div class="grid cols-2">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">AI settings</div><div class="card-sub">回答品質とコストの制御</div></div></div>
+            <table class="table">
+              <tbody>
+                <tr><td><b>Default model</b></td><td>gpt-4.1-mini</td></tr>
+                <tr><td><b>Response mode</b></td><td>根拠必須 / SQL表示</td></tr>
+                <tr><td><b>Unverified answers</b></td><td>警告付きで許可</td></tr>
+                <tr><td><b>Cost guardrail</b></td><td>¥80,000 / month</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Workspace policy</div><div class="card-sub">運用ルール</div></div></div>
+            <div class="action-queue">
+              <div class="action"><div class="toggle on"></div><div class="action-body"><b>回答に使用データと更新時刻を必ず表示</b><span>ユーザーが根拠を検証できる状態にする</span></div></div>
+              <div class="action"><div class="toggle on"></div><div class="action-body"><b>PII列のAI利用を制限</b><span>管理者承認なしではプロンプトに投入しない</span></div></div>
+              <div class="action"><div class="toggle on"></div><div class="action-body"><b>重要指標の変更は承認制</b><span>売上・粗利・MRRなどの定義変更を監査</span></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <aside class="assistant">
+    <div class="assistant-head">
+      <div class="ai-mark">✦</div>
+      <div><b>Nexus AI</b><span>画面全体を理解する常駐アシスタント</span></div>
+    </div>
+
+    <div class="ai-card">
+      <h3>この画面でできること</h3>
+      <div class="grounding-list">
+        <div class="grounding-item"><span>現在ページ</span><b id="assistantPage">Home</b></div>
+        <div class="grounding-item"><span>使用可能ソース</span><b>16</b></div>
+        <div class="grounding-item"><span>検証済み指標</span><b>14</b></div>
+        <div class="grounding-item"><span>データ鮮度</span><b>9分前</b></div>
+      </div>
+    </div>
+
+    <div class="ai-card">
+      <h3>おすすめプロンプト</h3>
+      <button class="prompt-chip" onclick="openAskWithPrompt('今週の売上変化を要因分解して')">今週の売上変化を要因分解して</button>
+      <button class="prompt-chip" onclick="openAskWithPrompt('データ品質が悪いソースを重要度順に出して')">データ品質が悪いソースを重要度順に出して</button>
+      <button class="prompt-chip" onclick="openAskWithPrompt('この回答を役員向けレポートにして')">この回答を役員向けレポートにして</button>
+      <button class="prompt-chip" onclick="openAskWithPrompt('アラート化すべき指標を提案して')">アラート化すべき指標を提案して</button>
+    </div>
+
+    <div class="ai-card">
+      <h3>信頼性チェック</h3>
+      <div class="grounding-list">
+        <div class="grounding-item"><span>Semantic readiness</span><b>92%</b></div>
+        <div class="grounding-item"><span>Verified answers</span><b>36</b></div>
+        <div class="grounding-item"><span>PII exposure risk</span><b>Low</b></div>
+        <div class="grounding-item"><span>Query cache hit</span><b>64%</b></div>
+      </div>
+    </div>
+
+    <div class="ai-card">
+      <h3>設計上のポイント</h3>
+      <p class="card-sub">AI回答を「信じる/信じない」ではなく、データ・定義・SQL・権限・信頼度を常に表示して、業務判断に使える状態にする。</p>
+    </div>
+  </aside>
+
+  <script>
+    const pageNames = {
+      home: "Home",
+      ask: "Ask AI",
+      data: "Data Hub",
+      model: "Model",
+      explore: "Explore",
+      reports: "Reports",
+      automations: "Automations",
+      governance: "Governance",
+      settings: "Settings",
+    };
+
+    function switchPage(page) {
+      document.querySelectorAll(".page").forEach(el => el.classList.toggle("active", el.id === "page-" + page));
+      document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.toggle("active", btn.dataset.page === page));
+      document.getElementById("assistantPage").textContent = pageNames[page] || page;
+      document.querySelector(".stage").scrollTop = 0;
+    }
+
+    document.querySelectorAll(".nav-btn[data-page]").forEach(btn => {
+      btn.addEventListener("click", () => switchPage(btn.dataset.page));
+    });
+
+    function setAskPrompt(text) {
+      document.getElementById("askInput").value = text.trim();
+    }
+
+    function openAskWithPrompt(text) {
+      switchPage("ask");
+      setAskPrompt(text);
+    }
+
+    function sendMockQuestion() {
+      const input = document.getElementById("askInput");
+      const text = input.value.trim() || "今週の重要な変化点を教えて";
+      const stream = document.getElementById("chatStream");
+      const user = document.createElement("div");
+      user.className = "message user";
+      user.textContent = text;
+      stream.appendChild(user);
+      const ai = document.createElement("div");
+      ai.className = "message ai";
+      ai.innerHTML = `質問を Revenue Semantic Model に照合しました。回答には使用データ、条件、信頼度を付けて返します。
+        <div class="answer-card">
+          <div class="answer-top"><div class="answer-title">生成中の分析プラン</div><span class="confidence">信頼度推定 87%</span></div>
+          <div class="trace">
+            <div class="trace-item"><div class="trace-label">Step 1</div><div class="trace-value">関連指標を特定</div></div>
+            <div class="trace-item"><div class="trace-label">Step 2</div><div class="trace-value">ドライバー分解</div></div>
+            <div class="trace-item"><div class="trace-label">Step 3</div><div class="trace-value">可視化を生成</div></div>
+          </div>
+        </div>`;
+      stream.appendChild(ai);
+      input.value = "";
+      stream.scrollTop = stream.scrollHeight;
+    }
+
+    document.getElementById("globalSearch").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        openAskWithPrompt(e.target.value);
+      }
+    });
+  </script>
+</body>
+</html>
