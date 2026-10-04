@@ -63,7 +63,11 @@ def _normalize(name: str) -> str:
 
 
 def _match(name: str, kw_list: list[str]) -> bool:
-    return any(kw in name for kw in kw_list)
+    # name/キーワード双方を正規化して突合（ひらがな→カタカナ。_normalize はべき等）。
+    # 片側のみ正規化すると "焼き鳥"(=正規化名"焼キ鳥") に ひらがなキーワード "焼き鳥" が
+    # マッチせず取りこぼすため、キーワード側も正規化して対称にする。
+    n = _normalize(name)
+    return any(_normalize(kw) in n for kw in kw_list)
 
 
 def classify(name) -> str:

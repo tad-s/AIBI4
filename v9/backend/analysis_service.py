@@ -15,6 +15,12 @@ import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 
+from poc.categorize import categorize  # PoC精緻化分類器（11分類）を流用
+
+# 11分類 → ベース分析の粗い heavy/light フラグへの対応（重複なし・排他）
+_HEAVY_CATS = {"揚げ物", "串", "ヘビー", "鍋", "締め"}
+_LIGHT_CATS = {"サラダ", "軽いつまみ", "海鮮", "デザート"}
+
 # ── 日本語フォント設定 ──
 import platform
 if platform.system() == "Windows":
@@ -103,9 +109,11 @@ def build_order_df(df: pd.DataFrame) -> pd.DataFrame | None:
     if "人数" in d.columns:
         d["人数"] = pd.to_numeric(d["人数"], errors="coerce")
     if "商品名" in d.columns:
-        d["_is_drink"] = d["商品名"].apply(lambda x: _kw_match(x, _DRINK_KW)).astype(int)
-        d["_is_heavy"] = d["商品名"].apply(lambda x: _kw_match(x, _HEAVY_KW)).astype(int)
-        d["_is_light"] = d["商品名"].apply(lambda x: _kw_match(x, _LIGHT_KW)).astype(int)
+        # PoC精緻化分類器の11分類でフラグを算出（カテゴリ列があれば再計算せず流用）
+        _cat = d["カテゴリ"] if "カテゴリ" in d.columns else d["商品名"].map(categorize)
+        d["_is_drink"] = (_cat == "ドリンク").astype(int)
+        d["_is_heavy"] = _cat.isin(_HEAVY_CATS).astype(int)
+        d["_is_light"] = _cat.isin(_LIGHT_CATS).astype(int)
 
     # 来店の正準キー（店舗・伝票番号・来店/退店時刻）。ingestion で付与済みの「来店ID」を最優先。
     # receipt_no 単独では店舗・日をまたいで使い回され一意にならない。
@@ -513,7 +521,8 @@ _DRINK_KEYWORDS_4 = [
 ]
 
 def _item_category_4(name: str) -> str:
-    return "ドリンク" if any(kw in name for kw in _DRINK_KEYWORDS_4) else "フード"
+    # バスケットのドリンク×フード判定。2値を維持しつつPoC分類器で精度向上。
+    return "ドリンク" if categorize(name) == "ドリンク" else "フード"
 
 
 def analysis_4_basket(order_df: pd.DataFrame | None) -> list[dict]:
