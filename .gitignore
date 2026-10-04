@@ -74,3 +74,12 @@ fetch_all_data.py
 skills-lock.json
 ベース環境構築メモ.txt
 oesデータ確認.xlsx
+
+# 棚卸し 2026-10-04: 生データ・生成物・一時ファイルの除外
+# data/ サブディレクトリの機密生データ（data/*.csv は直下のみカバーのため）
+data/**/*.csv
+# PoC生成物（再生成可能・大容量）
+T1/data/
+poc/data/
+# PDF抽出用 pypdf の一時展開
+.tmp_pdf/
