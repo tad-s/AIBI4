@@ -169,8 +169,15 @@ v9 には商品カテゴリを使う分析が **2系統** あり、**データ�
 - `5124dd8` 経路Aのカテゴリ判定を11分類器ベースに精緻化＋`classify._match` 正規化バグ修正（`焼き鳥`→串 等が復帰）。
 - `ce0c615` マスタSQLをコード同梱しクラウド経路Aの分類精度を修復。
 
-### 残タスク（経路Bへの反映・未着手）
-`classify.py` の分類修正は**経路Bには自動反映されない**（保存済みデータのため）。反映するには:
-- **#1** コード同梱バンドル `v9/backend/poc/data/poc_base.csv.gz` を再生成。
-- **#2** Supabase `poc_ikebukuro_items` テーブルの `category` 列を書き換え（★本番書込・要確認、`SUPABASE_SERVICE_KEY` 必要）。
-- 影響は少数（PoCの「その他」109→76件相当、`焼き鳥`/`あじのなめろう` 等）。経路A・原本・他店舗には影響なし。
+### 経路Bへの反映（完了）
+`classify.py` の分類修正は**経路Bには自動反映されない**（保存済みデータのため）。以下で反映済み（commit `b5bbd70`）:
+- **#1** コード同梱バンドル `v9/backend/poc/data/poc_base.csv.gz` を更新後テーブルから再生成。
+- **#2** Supabase `poc_ikebukuro_items` テーブルの `category` 列を書き換え（`apply_poc_category_fix.py`／`SUPABASE_SERVICE_KEY` 使用、本番・原本は不変）。
+- 池袋東口店PoCデータで実際に影響したのは **`あじのなめろう`（その他→海鮮・33行）のみ**。PoCの「その他」109→76。経路A・原本・他店舗には影響なし。
+- 再適用: 将来 `classify.py` を変えたら `v9/backend/apply_poc_category_fix.py` を実行（差分のみPATCH→検証、冪等）＋バンドル再生成。
+
+### 補足: 本番Railwayの環境変数
+- `SUPABASE_SERVICE_KEY` は **本番では未設定**（`/api/debug/supabase` の `service_key_set:false`）。
+  → 本番ではカテゴリ編集UI（保存）とテーブル書込は不可。内訳表示（anon読取）は可。
+  → #2 はローカル（SERVICE_KEYあり・同一Supabaseプロジェクト）から実行した。
+- 本番URL: `https://strong-enthusiasm-production-bb21.up.railway.app/`。GitHub連携で**自動デプロイ**。
