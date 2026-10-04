@@ -1,0 +1,407 @@
+<style>
+  :root {
+    --ground: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #eef1f5;
+    --ink: #1a1f29;
+    --muted: #5b6472;
+    --border: #dde2e9;
+    --border-strong: #c3cad4;
+    --base: #205fa6;      /* 経路A 通常ベース分析 */
+    --base-soft: #e7eff8;
+    --poc: #a9641f;       /* 経路B PoC専用 */
+    --poc-soft: #f6ece0;
+    --danger: #b23b3b;
+    --mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0f1319; --surface: #161b22; --surface-2: #1d232c;
+      --ink: #e6e9ef; --muted: #98a1b0; --border: #29313c; --border-strong: #3a4452;
+      --base: #6aa6dd; --base-soft: #17283a; --poc: #d6a05a; --poc-soft: #352819;
+      --danger: #e07a7a;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #f6f7f9; --surface: #ffffff; --surface-2: #eef1f5;
+    --ink: #1a1f29; --muted: #5b6472; --border: #dde2e9; --border-strong: #c3cad4;
+    --base: #205fa6; --base-soft: #e7eff8; --poc: #a9641f; --poc-soft: #f6ece0; --danger: #b23b3b;
+  }
+  :root[data-theme="dark"] {
+    --ground: #0f1319; --surface: #161b22; --surface-2: #1d232c;
+    --ink: #e6e9ef; --muted: #98a1b0; --border: #29313c; --border-strong: #3a4452;
+    --base: #6aa6dd; --base-soft: #17283a; --poc: #d6a05a; --poc-soft: #352819; --danger: #e07a7a;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  header.page { border-bottom: 1px solid var(--border); padding-bottom: 28px; margin-bottom: 36px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.2; margin: 0 0 12px; font-weight: 680; letter-spacing: -.01em; text-wrap: balance; }
+  .lede { font-size: 17px; color: var(--muted); margin: 0; max-width: 62ch; }
+
+  h2 { font-size: 22px; font-weight: 660; letter-spacing: -.01em; margin: 56px 0 6px; padding-top: 8px; }
+  h2 .tag { font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; vertical-align: middle; margin-left: 10px; letter-spacing: .02em; }
+  .tag.base { background: var(--base-soft); color: var(--base); }
+  .tag.poc { background: var(--poc-soft); color: var(--poc); }
+  h3 { font-size: 15px; font-weight: 640; margin: 30px 0 12px; letter-spacing: .01em; }
+  .sub { color: var(--muted); margin: 4px 0 0; max-width: 64ch; }
+
+  /* 比較カード */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 32px 0 8px; }
+  @media (max-width: 680px) { .cards { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; border-top: 3px solid var(--edge); }
+  .card.base { --edge: var(--base); }
+  .card.poc { --edge: var(--poc); }
+  .card h4 { margin: 0 0 2px; font-size: 16px; font-weight: 660; }
+  .card .ui { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 0 0 14px; }
+  .card dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; font-size: 13.5px; }
+  .card dt { color: var(--muted); white-space: nowrap; }
+  .card dd { margin: 0; }
+  .card .key { color: var(--edge); font-weight: 600; }
+
+  figure { margin: 24px 0 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px 20px 16px; }
+  figure .scroll { overflow-x: auto; }
+  svg { max-width: 100%; height: auto; display: block; margin: 0 auto; color: var(--ink); }
+  figcaption { font-size: 13px; color: var(--muted); margin-top: 14px; text-align: center; max-width: 68ch; margin-left: auto; margin-right: auto; }
+
+  .tablewrap { overflow-x: auto; margin: 14px 0; border: 1px solid var(--border); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; background: var(--surface); }
+  caption { text-align: left; font-family: var(--mono); font-size: 13px; padding: 11px 14px; background: var(--surface-2); color: var(--ink); border-bottom: 1px solid var(--border); font-weight: 600; }
+  caption .n { color: var(--muted); font-weight: 400; }
+  th, td { text-align: left; padding: 8px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  th { font-weight: 600; color: var(--muted); font-size: 12px; letter-spacing: .03em; text-transform: uppercase; }
+  td.col { font-family: var(--mono); color: var(--ink); white-space: nowrap; }
+  td.typ { font-family: var(--mono); color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .pk { font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--base); background: var(--base-soft); padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
+  .fk { font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--muted); background: var(--surface-2); padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
+  .hot { color: var(--poc); font-weight: 600; }
+  tr.hot td.col { color: var(--poc); }
+
+  .diff { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 16px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .diff th { background: var(--surface-2); }
+  .diff th:first-child { width: 22%; }
+  .diff .cA { color: var(--base); font-weight: 600; font-size: 12px; text-transform: none; letter-spacing: 0; }
+  .diff .cB { color: var(--poc); font-weight: 600; font-size: 12px; text-transform: none; letter-spacing: 0; }
+  .diff td { border-bottom: 1px solid var(--border); }
+  .diff tr:last-child td { border-bottom: none; }
+  .diff td.lbl { font-weight: 600; color: var(--ink); background: var(--surface-2); }
+
+  .note { font-size: 13px; color: var(--muted); border-left: 3px solid var(--border-strong); padding: 4px 0 4px 14px; margin: 16px 0; }
+  .note strong { color: var(--ink); font-weight: 640; }
+  code { font-family: var(--mono); font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); font-family: var(--mono); }
+</style>
+
+<div class="wrap">
+  <header class="page">
+    <p class="eyebrow">AIBI4 / v9 · データ構成図</p>
+    <h1>テーブル構成の2系統 — 通常ベース分析 と 池袋東口PoC専用</h1>
+    <p class="lede">v9 は目的の異なる2つのデータ構成を併用する。全店舗を扱う<strong>正規化スター構成</strong>（原本＋RPC集約）と、池袋東口店に閉じた<strong>非正規化フラット1枚テーブル</strong>（オーダー粒度保持・除外適用済み）。両者の形・粒度・カテゴリの持ち方がどう違うかを示す。</p>
+  </header>
+
+  <!-- 比較サマリ -->
+  <section>
+    <div class="cards">
+      <div class="card base">
+        <h4>経路A ｜ 通常ベース分析</h4>
+        <p class="ui">UI: 「データ取得」ボタン → 🔬 ベース分析（12項目）</p>
+        <dl>
+          <dt>データ源</dt><dd><span class="key">原本4テーブル</span> を RPC が結合</dd>
+          <dt>対象</dt><dd>全店舗（分析対象15店舗）</dd>
+          <dt>粒度</dt><dd>来店×商品（<span class="key">オーダー粒度は消失</span>）</dd>
+          <dt>カテゴリ</dt><dd>取得時に<span class="key">その場で計算</span></dd>
+          <dt>時刻</dt><dd>UTC格納 → JST表示</dd>
+          <dt>除外</dt><dd>なし（全商品）</dd>
+        </dl>
+      </div>
+      <div class="card poc">
+        <h4>経路B ｜ 池袋東口 PoC専用</h4>
+        <p class="ui">UI: 「🍶 テング池袋東口店 PoC分析」ボタン</p>
+        <dl>
+          <dt>データ源</dt><dd><span class="key">専用1テーブル</span> poc_ikebukuro_items</dd>
+          <dt>対象</dt><dd>池袋東口店のみ・2026/3〜5</dd>
+          <dt>粒度</dt><dd>明細（<span class="key">オーダー粒度を保持</span>）</dd>
+          <dt>カテゴリ</dt><dd><span class="key">列に保存済み</span>（作り置き）</dd>
+          <dt>時刻</dt><dd>UTC格納（JST=UTC+9の正しいinstant）</dd>
+          <dt>除外</dt><dd>構築時に適用済み（焼き込み）</dd>
+        </dl>
+      </div>
+    </div>
+    <p class="note"><strong>なぜ別構成なのか：</strong> 通常RPC <code>get_izakaya_sales</code> は <code>DISTINCT ON (visit_id, item_name, quantity, unit_price)</code> でオーダー粒度を潰すため、「同時注文／連続注文」を分析できない。PoCはこの分析のために <code>order_id</code>・<code>order_seq</code> を保持した専用テーブルを別に作り、原本を保全している。</p>
+  </section>
+
+  <!-- 経路A 構成 -->
+  <h2>経路A ｜ 通常ベース分析の構成<span class="tag base">正規化スター + RPC</span></h2>
+  <p class="sub">原本テーブル群を RPC が結合・重複除去・天気付与し、フラットな明細行を返す。アプリ側が日本語列とカテゴリを付与して集計する。</p>
+
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 860 430" role="img" aria-label="通常ベース分析のスター構成: stores・visits・orders・order_items・weather_locations・daily_weather を RPC get_izakaya_sales が結合し、DISTINCT ON で重複除去してフラット明細を返す。アプリがカテゴリを付与する。">
+        <defs>
+          <marker id="aA" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="currentColor"/></marker>
+          <marker id="aBase" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--base)"/></marker>
+        </defs>
+
+        <!-- 原本テーブル群 左側 -->
+        <g font-family="var(--mono)" font-size="12.5">
+          <!-- stores -->
+          <rect x="20" y="24" width="150" height="54" rx="7" fill="var(--surface-2)" stroke="var(--border-strong)"/>
+          <text x="32" y="44" fill="var(--ink)" font-weight="700">stores</text>
+          <text x="32" y="63" fill="var(--muted)" font-size="11">店舗マスタ・緯度経度</text>
+
+          <!-- weather_locations -->
+          <rect x="20" y="96" width="150" height="54" rx="7" fill="var(--surface-2)" stroke="var(--border-strong)"/>
+          <text x="32" y="116" fill="var(--ink)" font-weight="700">weather_locations</text>
+          <text x="32" y="135" fill="var(--muted)" font-size="11">天気地点（21）</text>
+
+          <!-- daily_weather -->
+          <rect x="20" y="168" width="150" height="54" rx="7" fill="var(--surface-2)" stroke="var(--border-strong)"/>
+          <text x="32" y="188" fill="var(--ink)" font-weight="700">daily_weather</text>
+          <text x="32" y="207" fill="var(--muted)" font-size="11">日別天気</text>
+
+          <!-- visits -->
+          <rect x="230" y="40" width="150" height="54" rx="7" fill="var(--surface)" stroke="var(--border-strong)"/>
+          <text x="242" y="60" fill="var(--ink)" font-weight="700">visits</text>
+          <text x="242" y="79" fill="var(--muted)" font-size="11">来店・人数・時刻</text>
+
+          <!-- orders -->
+          <rect x="230" y="128" width="150" height="54" rx="7" fill="var(--surface)" stroke="var(--border-strong)"/>
+          <text x="242" y="148" fill="var(--ink)" font-weight="700">orders</text>
+          <text x="242" y="167" fill="var(--muted)" font-size="11">注文ヘッダ ⚠重複</text>
+
+          <!-- order_items -->
+          <rect x="230" y="216" width="150" height="54" rx="7" fill="var(--surface)" stroke="var(--border-strong)"/>
+          <text x="242" y="236" fill="var(--ink)" font-weight="700">order_items</text>
+          <text x="242" y="255" fill="var(--muted)" font-size="11">明細 ~282,983行</text>
+        </g>
+
+        <!-- FK 関係線 -->
+        <g stroke="currentColor" stroke-width="1.4" fill="none" opacity="0.65">
+          <path d="M170 51 L230 60" marker-end="url(#aA)"/>              <!-- stores->visits -->
+          <path d="M170 120 L205 120 L205 175 L230 160" marker-end="url(#aA)"/> <!-- wloc->dweather via? just connect -->
+          <path d="M305 94 L305 128" marker-end="url(#aA)"/>              <!-- visits->orders -->
+          <path d="M305 182 L305 216" marker-end="url(#aA)"/>             <!-- orders->order_items -->
+        </g>
+        <g font-family="var(--sans)" font-size="10.5" fill="var(--muted)">
+          <text x="178" y="44">store_id</text>
+          <text x="312" y="116">visit_id</text>
+          <text x="312" y="204">order_id</text>
+        </g>
+
+        <!-- RPC ボックス -->
+        <rect x="470" y="96" width="150" height="150" rx="9" fill="var(--base-soft)" stroke="var(--base)" stroke-width="1.6"/>
+        <text x="545" y="130" text-anchor="middle" font-family="var(--mono)" font-size="12.5" font-weight="700" fill="var(--base)">RPC</text>
+        <text x="545" y="148" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--base)">get_izakaya_sales</text>
+        <line x1="486" y1="162" x2="604" y2="162" stroke="var(--base)" stroke-width="1" opacity="0.4"/>
+        <text x="545" y="182" text-anchor="middle" font-size="10.5" fill="var(--base)">DISTINCT ON</text>
+        <text x="545" y="197" text-anchor="middle" font-size="10.5" fill="var(--base)">(重複除去)</text>
+        <text x="545" y="218" text-anchor="middle" font-size="10.5" fill="var(--base)">+ LEFT JOIN 天気</text>
+        <text x="545" y="233" text-anchor="middle" font-size="10.5" fill="var(--base)">SECURITY DEFINER</text>
+
+        <!-- 原本 -> RPC -->
+        <g stroke="var(--base)" stroke-width="1.6" fill="none">
+          <path d="M380 67 C 430 90, 440 140, 470 150" marker-end="url(#aBase)"/>
+          <path d="M380 155 L470 165" marker-end="url(#aBase)"/>
+          <path d="M380 243 C 430 220, 440 195, 470 185" marker-end="url(#aBase)"/>
+          <path d="M170 195 C 360 300, 420 240, 470 210" marker-end="url(#aBase)" opacity="0.5" stroke-dasharray="4 3"/>
+        </g>
+
+        <!-- 出力 -->
+        <rect x="690" y="110" width="150" height="122" rx="9" fill="var(--surface)" stroke="var(--border-strong)"/>
+        <text x="765" y="134" text-anchor="middle" font-family="var(--mono)" font-size="11.5" font-weight="700" fill="var(--ink)">フラット明細</text>
+        <text x="765" y="154" text-anchor="middle" font-size="10.5" fill="var(--muted)">来店×商品 の行</text>
+        <text x="765" y="176" text-anchor="middle" font-size="10.5" fill="var(--danger)">order_id / order_seq</text>
+        <text x="765" y="190" text-anchor="middle" font-size="10.5" fill="var(--danger)">を含まない</text>
+        <text x="765" y="212" text-anchor="middle" font-size="10.5" fill="var(--muted)">＋アプリで</text>
+        <text x="765" y="225" text-anchor="middle" font-size="10.5" fill="var(--poc)">カテゴリ列を付与</text>
+
+        <path d="M620 171 L690 171" stroke="var(--base)" stroke-width="1.6" fill="none" marker-end="url(#aBase)"/>
+      </svg>
+    </div>
+    <figcaption>原本4テーブル（＋天気2テーブル）を RPC が結合し、<code>DISTINCT ON</code> で重複を除去してフラットな明細を返す。この過程で <span class="hot">オーダー粒度（order_id / order_seq）は失われ</span>、カテゴリはアプリ側がその場で付与する。</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <caption>visits <span class="n">来店記録</span></caption>
+      <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+      <tbody>
+        <tr><td class="col">visit_id<span class="pk">PK</span></td><td class="typ">serial</td><td>来店ID</td></tr>
+        <tr><td class="col">store_id<span class="fk">FK</span></td><td class="typ">integer</td><td>→ stores</td></tr>
+        <tr><td class="col">receipt_no</td><td class="typ">text</td><td>伝票番号（店舗・日をまたぎ重複あり）</td></tr>
+        <tr><td class="col">visit_time</td><td class="typ">timestamptz</td><td>来店時刻（<strong>UTC格納</strong>）</td></tr>
+        <tr><td class="col">leave_time</td><td class="typ">timestamptz</td><td>退店時刻（UTC）</td></tr>
+        <tr><td class="col">party_size</td><td class="typ">integer</td><td>来店人数</td></tr>
+        <tr><td class="col">customer_layer</td><td class="typ">text</td><td>客層</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>orders <span class="n">注文ヘッダ</span> ／ order_items <span class="n">注文明細 ~282,983行</span></caption>
+      <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+      <tbody>
+        <tr><td class="col">order_id<span class="pk">PK</span></td><td class="typ">serial</td><td>注文ID（orders）／FKで order_items が参照</td></tr>
+        <tr><td class="col">visit_id<span class="fk">FK</span></td><td class="typ">integer</td><td>→ visits（⚠ 同一visitに重複多数 → RPCで除去）</td></tr>
+        <tr><td class="col">order_time</td><td class="typ">timestamptz</td><td>注文時刻（UTC）</td></tr>
+        <tr><td class="col">item_name_raw</td><td class="typ">text</td><td>商品名（生データ）</td></tr>
+        <tr><td class="col">quantity</td><td class="typ">integer</td><td>数量</td></tr>
+        <tr><td class="col">unit_price</td><td class="typ">numeric</td><td>単価（円）</td></tr>
+        <tr><td class="col">line_type</td><td class="typ">text</td><td><code>M</code>=商品明細（分析対象）／他=調整行</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">他に <strong>stores</strong>（店舗マスタ・緯度経度・location_id）、<strong>weather_locations</strong>（21地点）、<strong>daily_weather</strong>（location_id + date が PK）。RPC は天気を <code>LEFT JOIN</code> で自動付与する。カテゴリ列は原本に存在せず、取得後にアプリの分類器が付与する。</p>
+
+  <!-- 経路B 構成 -->
+  <h2>経路B ｜ 池袋東口 PoC専用の構成<span class="tag poc">非正規化フラット1枚</span></h2>
+  <p class="sub">原本を1枚に結合・除外適用・分類済みにした専用テーブル。オーダー粒度を保持し、カテゴリは列に保存される。原本は不変。</p>
+
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 860 300" role="img" aria-label="PoC専用構成: 原本visits/orders/order_itemsをローカルで1度だけ結合・除外適用・分類し、poc_ikebukuro_items 1枚テーブルに投入。order_id/order_seq/category を保持。">
+        <defs>
+          <marker id="aPoc" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><polygon points="0,0 9,4.5 0,9" fill="var(--poc)"/></marker>
+        </defs>
+        <!-- 原本 -->
+        <rect x="20" y="88" width="170" height="120" rx="8" fill="var(--surface-2)" stroke="var(--border-strong)"/>
+        <text x="105" y="112" text-anchor="middle" font-family="var(--mono)" font-size="12" font-weight="700" fill="var(--ink)">原本テーブル</text>
+        <text x="105" y="134" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--muted)">visits</text>
+        <text x="105" y="151" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--muted)">orders</text>
+        <text x="105" y="168" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--muted)">order_items</text>
+        <text x="105" y="192" text-anchor="middle" font-size="10.5" fill="var(--poc)">（不変）</text>
+
+        <!-- 変換パイプライン -->
+        <rect x="285" y="78" width="200" height="140" rx="9" fill="var(--poc-soft)" stroke="var(--poc)" stroke-width="1.6"/>
+        <text x="385" y="100" text-anchor="middle" font-family="var(--mono)" font-size="12" font-weight="700" fill="var(--poc)">ローカルで1度だけ構築</text>
+        <line x1="301" y1="110" x2="469" y2="110" stroke="var(--poc)" stroke-width="1" opacity="0.4"/>
+        <g font-size="11" fill="var(--poc)">
+          <text x="301" y="130">① M行のみ / 期間 / 14–23時</text>
+          <text x="301" y="149">② 定食・対象外CSV 除外</text>
+          <text x="301" y="168">③ コース・宴会・FD 除外</text>
+          <text x="301" y="187">④ classify でカテゴリ付与</text>
+          <text x="301" y="206">　（除外=落とす）</text>
+        </g>
+
+        <!-- 専用テーブル -->
+        <rect x="585" y="70" width="255" height="156" rx="9" fill="var(--surface)" stroke="var(--poc)" stroke-width="1.8"/>
+        <text x="712" y="94" text-anchor="middle" font-family="var(--mono)" font-size="12.5" font-weight="700" fill="var(--poc)">poc_ikebukuro_items</text>
+        <line x1="601" y1="104" x2="824" y2="104" stroke="var(--poc)" stroke-width="1" opacity="0.4"/>
+        <g font-family="var(--mono)" font-size="11" fill="var(--ink)">
+          <text x="601" y="124">visit_id · order_id · order_seq</text>
+          <text x="601" y="143" fill="var(--poc)" font-weight="700">↑ オーダー粒度を保持</text>
+          <text x="601" y="165">item_name · category · fd</text>
+          <text x="601" y="184" fill="var(--poc)" font-weight="700">↑ カテゴリを列に保存</text>
+          <text x="601" y="206" fill="var(--muted)">56,728行 · JST格納 · RLS SELECT</text>
+        </g>
+
+        <path d="M190 148 L285 148" stroke="var(--poc)" stroke-width="1.6" fill="none" marker-end="url(#aPoc)"/>
+        <path d="M485 148 L585 148" stroke="var(--poc)" stroke-width="1.6" fill="none" marker-end="url(#aPoc)"/>
+        <text x="505" y="140" font-size="10.5" fill="var(--muted)">REST投入</text>
+      </svg>
+    </div>
+    <figcaption>原本を<strong>ローカルで1度だけ</strong>結合・除外・分類して <code>poc_ikebukuro_items</code> に投入する（本番Railwayはこの完成品を読むだけ）。<span class="hot">order_id / order_seq / category を列として保持</span>するのが通常構成との決定的な違い。</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <caption>poc_ikebukuro_items <span class="n">除外適用済み・order粒度・56,728行</span></caption>
+      <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+      <tbody>
+        <tr><td class="col">id<span class="pk">PK</span></td><td class="typ">bigint identity</td><td>連番</td></tr>
+        <tr><td class="col">visit_id</td><td class="typ">text</td><td>1来店の正準ID（源泉UUID）</td></tr>
+        <tr><td class="col">store_id</td><td class="typ">text</td><td>店舗</td></tr>
+        <tr><td class="col">receipt_no</td><td class="typ">text</td><td>伝票番号</td></tr>
+        <tr><td class="col">party_size</td><td class="typ">integer</td><td>来店人数</td></tr>
+        <tr><td class="col">visit_start</td><td class="typ">timestamptz</td><td>来店時刻（<strong>UTC格納</strong>・JST=UTC+9）</td></tr>
+        <tr class="hot"><td class="col">order_id</td><td class="typ">text</td><td>オーダー＝<strong>同時注文</strong>の単位</td></tr>
+        <tr class="hot"><td class="col">order_seq</td><td class="typ">integer</td><td>来店内オーダー順＝<strong>連続注文</strong>の判定</td></tr>
+        <tr><td class="col">line_index</td><td class="typ">integer</td><td>オーダー内の明細順</td></tr>
+        <tr><td class="col">ordered_at</td><td class="typ">timestamptz</td><td>注文時刻（UTC格納・JST変換で14–23時）</td></tr>
+        <tr><td class="col">item_name</td><td class="typ">text</td><td>商品名</td></tr>
+        <tr class="hot"><td class="col">category</td><td class="typ">text</td><td><strong>保存済みカテゴリ</strong>（11分類）※編集可</td></tr>
+        <tr class="hot"><td class="col">fd</td><td class="typ">text</td><td>ドリンク / フード</td></tr>
+        <tr><td class="col">quantity</td><td class="typ">numeric</td><td>数量</td></tr>
+        <tr><td class="col">unit_price</td><td class="typ">numeric</td><td>単価</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note"><strong>索引：</strong> <code>idx_poc_visit(visit_id)</code>・<code>idx_poc_order(order_id, order_seq)</code>。<strong>RLS：</strong> anon / authenticated に <code>SELECT</code> のみ許可（書込は service key 必須）。<strong>原本保全：</strong> この1枚は原本と独立で、原本（visits / orders / order_items）は一切変更しない。</p>
+
+  <!-- 決定的な差分 -->
+  <h2>決定的な違い ｜ オーダー粒度とカテゴリの持ち方</h2>
+  <p class="sub">同じ原本から出発しても、2構成は「行が何を1行とするか」と「カテゴリをいつ決めるか」が逆になる。</p>
+
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 820 300" role="img" aria-label="差分図: 経路Aは来店×商品の1行でorder_id/order_seqを持たず、カテゴリは実行時計算。経路Bは明細1行ごとにorder_id/order_seqを持ち、カテゴリは列に保存。">
+        <!-- 経路A 側 -->
+        <text x="200" y="28" text-anchor="middle" font-family="var(--mono)" font-size="12.5" font-weight="700" fill="var(--base)">経路A｜1行 = 来店×商品</text>
+        <g font-family="var(--mono)" font-size="10.5">
+          <rect x="40" y="48" width="320" height="26" fill="var(--surface)" stroke="var(--border)"/>
+          <rect x="40" y="48" width="320" height="26" fill="var(--base-soft)" opacity="0.5"/>
+          <text x="52" y="65" fill="var(--muted)">visit · item · qty · price · 天気</text>
+          <rect x="40" y="78" width="320" height="22" fill="var(--surface)" stroke="var(--border)"/>
+          <text x="52" y="93" fill="var(--ink)">生ビール中 ×1</text>
+          <rect x="40" y="104" width="320" height="22" fill="var(--surface)" stroke="var(--border)"/>
+          <text x="52" y="119" fill="var(--ink)">唐揚げ ×1</text>
+        </g>
+        <text x="200" y="152" text-anchor="middle" font-size="11" fill="var(--danger)">✕ order_id / order_seq が無い</text>
+        <text x="200" y="171" text-anchor="middle" font-size="11" fill="var(--danger)">→ 同時・連続注文は分析不可</text>
+        <text x="200" y="196" text-anchor="middle" font-size="11" fill="var(--poc)">カテゴリ = 実行時に計算（列に無い）</text>
+        <text x="200" y="215" text-anchor="middle" font-size="10.5" fill="var(--muted)">→ コード修正が即反映</text>
+
+        <!-- 区切り -->
+        <line x1="410" y1="40" x2="410" y2="230" stroke="var(--border-strong)" stroke-dasharray="3 4"/>
+
+        <!-- 経路B 側 -->
+        <text x="620" y="28" text-anchor="middle" font-family="var(--mono)" font-size="12.5" font-weight="700" fill="var(--poc)">経路B｜1行 = 明細（order粒度）</text>
+        <g font-family="var(--mono)" font-size="10.5">
+          <rect x="460" y="48" width="320" height="26" fill="var(--poc-soft)" opacity="0.6"/>
+          <rect x="460" y="48" width="320" height="26" fill="none" stroke="var(--border)"/>
+          <text x="472" y="65" fill="var(--muted)">… order_id · order_seq · category · fd</text>
+          <rect x="460" y="78" width="320" height="22" fill="var(--surface)" stroke="var(--border)"/>
+          <text x="472" y="93" fill="var(--ink)">O-1 · seq1 · 生ビール中 · ドリンク</text>
+          <rect x="460" y="104" width="320" height="22" fill="var(--surface)" stroke="var(--border)"/>
+          <text x="472" y="119" fill="var(--ink)">O-2 · seq2 · 唐揚げ · 揚げ物</text>
+        </g>
+        <text x="620" y="152" text-anchor="middle" font-size="11" fill="var(--poc)">✓ order_id=同時 / order_seq=連続</text>
+        <text x="620" y="171" text-anchor="middle" font-size="11" fill="var(--poc)">→ レコメンド分析が可能</text>
+        <text x="620" y="196" text-anchor="middle" font-size="11" fill="var(--poc)">カテゴリ = 列に保存済み</text>
+        <text x="620" y="215" text-anchor="middle" font-size="10.5" fill="var(--muted)">→ テーブル書換えで反映</text>
+      </svg>
+    </div>
+    <figcaption>通常構成は <code>DISTINCT ON</code> でオーダーを潰すため1行が「来店×商品」になり、同時・連続注文は追えない。PoC構成は明細1行＝order粒度で <code>order_id</code>・<code>order_seq</code> を保持する。カテゴリも、通常は実行時計算（＝コード修正が即反映）／PoCは列に保存（＝テーブル書換えが必要）と逆になる。</figcaption>
+  </figure>
+
+  <table class="diff">
+    <thead><tr><th>観点</th><th class="cA">経路A ｜ 通常ベース分析</th><th class="cB">経路B ｜ 池袋東口 PoC</th></tr></thead>
+    <tbody>
+      <tr><td class="lbl">構造</td><td>正規化スター（4テーブル＋天気2）</td><td>非正規化フラット1枚</td></tr>
+      <tr><td class="lbl">テーブル</td><td><span style="font-family:var(--mono);font-size:12px">stores / visits / orders / order_items</span></td><td><span style="font-family:var(--mono);font-size:12px">poc_ikebukuro_items</span></td></tr>
+      <tr><td class="lbl">取得方法</td><td>RPC <code>get_izakaya_sales</code>（結合・DISTINCT ON）</td><td>テーブル全件 SELECT（結合なし）</td></tr>
+      <tr><td class="lbl">対象</td><td>全店舗（分析対象15店舗）</td><td>池袋東口店のみ・2026/3〜5</td></tr>
+      <tr><td class="lbl">1行の単位</td><td>来店 × 商品</td><td>明細（order粒度）</td></tr>
+      <tr><td class="lbl">オーダー粒度</td><td><span class="hot" style="color:var(--danger)">消失（order_id / order_seq 無し）</span></td><td><span class="hot">保持（同時=order_id / 連続=order_seq）</span></td></tr>
+      <tr><td class="lbl">カテゴリ</td><td>実行時にその場で計算（列に無い）</td><td>列に保存済み（作り置き・編集可）</td></tr>
+      <tr><td class="lbl">除外</td><td>かけない（全商品・「除外」品も残す）</td><td>構築時に適用済み（定食/対象外/コース/宴会）</td></tr>
+      <tr><td class="lbl">時刻</td><td>UTC格納 → JST表示（※原本visitsは+9hズレの既知バグ）</td><td>UTC格納の正しいinstant → JST変換で14–23時（ズレなし）</td></tr>
+      <tr><td class="lbl">書込</td><td>読取のみ（原本は不変）</td><td>category 編集可（service key・原本は不変）</td></tr>
+      <tr><td class="lbl">修正の反映</td><td>コード修正で即（再デプロイ後）</td><td>テーブル / バンドル書換えが必要</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    AIBI4 v9 · docs/V9_ANALYSIS_PATHS_AND_EXCLUSIONS.md と対。DDL: etc/poc_table_ddl.sql ／ スキーマ: docs/SUPABASE_IZAKAYA.md
+  </footer>
+</div>

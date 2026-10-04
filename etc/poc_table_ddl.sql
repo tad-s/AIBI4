@@ -12,11 +12,11 @@ CREATE TABLE IF NOT EXISTS public.poc_ikebukuro_items (
     store_id     text,
     receipt_no   text,
     party_size   integer,       -- 来店人数（この来店グループの人数）
-    visit_start  timestamptz,   -- 来店時刻（JST, +09:00で格納）
+    visit_start  timestamptz,   -- 来店時刻（UTC格納の正しいinstant。JST=UTC+9。INSERTは+09:00付きで投入しPostgresがUTCへ正規化→読出しは+00:00）
     order_id     text,          -- オーダー（同時注文の単位）
     order_seq    integer,       -- 来店内オーダー順（連続注文の判定に使用）
     line_index   integer,
-    ordered_at   timestamptz,   -- 注文時刻（JST, +09:00で格納）
+    ordered_at   timestamptz,   -- 注文時刻（UTC格納の正しいinstant。JST=UTC+9。読出しは+00:00、JST変換で14-23時に収まる）
     item_name    text,
     category     text,          -- ドリンク/揚げ物/串/海鮮/鍋/サラダ/ヘビー/軽いつまみ/締め/デザート/その他
     fd           text,          -- 'ドリンク' or 'フード'

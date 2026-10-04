@@ -163,6 +163,17 @@ v9 には商品カテゴリを使う分析が **2系統** あり、**データ�
 
 ---
 
+## 5-TZ. タイムゾーンの扱い【検証済み 2026-10-04】
+
+- **PoCテーブル `poc_ikebukuro_items` は正しい**（UTC格納の正しいinstant）。
+  - 生CSVはJST壁時計のナイーブ値（例 `14:02:03`）。INSERTで `+09:00` を付けて投入し、Postgres が UTC へ正規化 → 読出しは `+00:00`（例 `05:02:03+00:00` = JST 14:02:03、同一瞬間）。
+  - 読み戻し側は全てJST変換してから使用: `drill.py` は `tz_convert("Asia/Tokyo")` 後に `.dt.hour`、`poc_router` は `utc=True` パース→`tz_convert`→JST naive。コア分析（同時/連続）は `order_id`/`order_seq` を使い時刻非依存。
+  - 検証: 端点突合（生CSV JST == テーブルUTC→JST）完全一致、hour分布は14–23時・19時ピーク（UTC誤読なら5–13時になるが起きていない）。
+  - 注意: DDLコメントの「JST +09:00格納」は INSERT形式の話で、格納/読出しは UTC（`+00:00`）。表記は 2026-10-04 に「UTC格納」へ修正済み。
+- **原本 `visits`（通常ベース分析側）は別件で +9hズレの既知バグあり** → [[supabase-timezone-bug]]。JST壁時計を `+00:00` で誤保存。補正SQL `etc/fix_timezone_migration.sql` は未実行。PoCの正しさとは無関係。
+
+---
+
 ## 6. 修正履歴（2026-10-04）と残タスク
 
 ### 反映済み（push済 / 本番は再デプロイ後）
