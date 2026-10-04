@@ -159,6 +159,8 @@ async def debug_supabase():
         "supabase_project_id": hint,
         "url_set": bool(SUPABASE_URL),
         "key_set": bool(SUPABASE_KEY),
+        # PoCカテゴリ編集(poc_ikebukuro_items へのPATCH書込)に必要。有無(真偽)のみ返す。
+        "service_key_set": bool(os.getenv("SUPABASE_SERVICE_KEY", "")),
     }
 
 
