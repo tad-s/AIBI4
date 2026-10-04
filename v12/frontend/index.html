@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AIBI4 V12 — AI Native BI</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <aside class="rail">
+    <div class="brand">
+      <span class="brand-mark">12</span>
+      <span class="brand-text">AIBI</span>
+    </div>
+    <button class="nav active" data-page="home">Home</button>
+    <button class="nav" data-page="ask">Ask</button>
+    <button class="nav" data-page="explore">Explore</button>
+    <button class="nav" data-page="model">Model</button>
+  </aside>
+
+  <main class="workspace">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">AI Native BI Workspace</p>
+        <h1>AIBI4 V12</h1>
+      </div>
+      <div class="status-row">
+        <span id="api-status" class="status">API確認中</span>
+        <span id="session-status" class="status muted">未読込</span>
+      </div>
+    </header>
+
+    <section class="control-card">
+      <div class="field">
+        <label>データセット</label>
+        <select id="dataset-select"></select>
+      </div>
+      <div class="field wide">
+        <label>月</label>
+        <div id="month-chips" class="chips muted-box">月一覧を読み込み中</div>
+      </div>
+      <div class="field wide">
+        <label>店舗</label>
+        <input id="store-search" type="search" placeholder="店舗名で絞り込み">
+        <div id="store-list" class="store-list muted-box">店舗一覧を読み込み中</div>
+      </div>
+      <div class="load-actions">
+        <button id="demo-btn" class="btn primary">デモデータで開始</button>
+        <button id="load-btn" class="btn">Supabaseから読込</button>
+      </div>
+      <div id="load-progress" class="progress hidden">
+        <div id="progress-bar"></div>
+        <span id="progress-text">待機中</span>
+      </div>
+    </section>
+
+    <section id="page-home" class="page active">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Home</p>
+          <h2>ダッシュボード</h2>
+        </div>
+        <button id="refresh-dashboard-btn" class="btn subtle">再集計</button>
+      </div>
+      <div id="kpi-grid" class="kpi-grid"></div>
+      <div id="dashboard-grid" class="card-grid">
+        <div class="empty">
+          <strong>まだデータがありません。</strong>
+          <span>まずは「デモデータで開始」を押すと、外部接続なしでV12を確認できます。</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-ask" class="page">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Ask AI</p>
+          <h2>自然言語で分析</h2>
+        </div>
+        <button id="clear-history-btn" class="btn subtle">履歴クリア</button>
+      </div>
+      <div id="ask-results" class="stack">
+        <div class="empty">
+          <strong>右側のAIパネルから質問できます。</strong>
+          <span>例: 「店舗別の売上ランキングを見せて」「時間帯別の客単価を知りたい」</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-explore" class="page">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Explore</p>
+          <h2>指標と軸から分析</h2>
+        </div>
+      </div>
+      <div class="explore-builder">
+        <div class="field"><label>指標</label><select id="metric-select"></select></div>
+        <div class="field"><label>軸1</label><select id="dim1-select"></select></div>
+        <div class="field"><label>軸2</label><select id="dim2-select"></select></div>
+        <div class="field"><label>表示</label><select id="chart-select">
+          <option value="bar">棒グラフ</option>
+          <option value="line">折れ線</option>
+          <option value="pie">構成</option>
+          <option value="table">表</option>
+        </select></div>
+        <button id="run-query-btn" class="btn primary">分析実行</button>
+      </div>
+      <div id="explore-result" class="stack"></div>
+    </section>
+
+    <section id="page-model" class="page">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Model</p>
+          <h2>セマンティックモデル</h2>
+        </div>
+      </div>
+      <div class="model-grid">
+        <div class="panel"><h3>指標</h3><div id="metric-catalog" class="catalog"></div></div>
+        <div class="panel"><h3>軸</h3><div id="dimension-catalog" class="catalog"></div></div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="assistant">
+    <div class="assistant-head">
+      <p class="eyebrow">AI Copilot</p>
+      <h2>質問・深掘り</h2>
+    </div>
+    <textarea id="ask-input" rows="5" placeholder="例: 新宿店の月別売上推移を見せて"></textarea>
+    <div class="assistant-actions">
+      <button id="ask-new-btn" class="btn subtle">新規質問</button>
+      <button id="ask-send-btn" class="btn primary">継続質問</button>
+    </div>
+    <div class="hint">
+      <strong>V12方針</strong>
+      <span>LLMにはコードを書かせず、QuerySpecに変換して決定論的に集計します。</span>
+    </div>
+    <div id="assistant-log" class="assistant-log"></div>
+  </aside>
+
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
