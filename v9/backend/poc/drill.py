@@ -104,3 +104,35 @@ def item_hours(df, item, exclude=False) -> dict:
              for h in agg.index]
     hours.sort(key=lambda r: r["hour"])
     return {"item": item, "total_qty": int(sub["quantity"].sum()), "hours": hours}
+
+
+# ── 年代×カテゴリ の人気商品 TOP5（PoC⑨の「上位商品」ドリル。年代は2026-09のみ） ──
+from poc.analyses import _AGE_LABELS
+
+_AGE_REV = {v: k for k, v in _AGE_LABELS.items()}   # 年代ラベル → 客層1コード
+
+
+def age_category_items(df: pd.DataFrame, age_label: str, top: int = 5) -> list[dict]:
+    """指定年代(客層1ラベル)の来店で、カテゴリごとに数量上位 top 商品を返す。
+
+    年代は customer_layer を持つ行（＝2026-09のみ）に限られる。
+    戻り値はフロントの汎用テーブルで表示できるフラットな行配列。
+    """
+    code = _AGE_REV.get(age_label)
+    if code is None or "customer_layer" not in df.columns:
+        return []
+    d = df[df["customer_layer"].astype("string").str.zfill(2) == code]
+    if d.empty:
+        return []
+    rows: list[dict] = []
+    # カテゴリは数量合計の多い順に並べる
+    cat_order = d.groupby("category")["quantity"].sum().sort_values(ascending=False).index
+    for cat in cat_order:
+        sub = d[d["category"] == cat]
+        g = (sub.groupby("item_name")
+                .agg(数量=("quantity", "sum"), 来店=("visit_id", "nunique"))
+                .sort_values("数量", ascending=False).head(top).reset_index())
+        for i, r in g.iterrows():
+            rows.append({"カテゴリ": str(cat), "順位": int(i + 1), "商品": r["item_name"],
+                         "数量": int(r["数量"]), "来店": int(r["来店"])})
+    return rows

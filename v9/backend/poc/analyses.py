@@ -624,6 +624,7 @@ def analysis_age_category(df):
             "年代差の大きいカテゴリはターゲット年代の来店時間帯に合わせて訴求",
         ],
         "table": table,
+        "drill": {"type": "age_items", "col": "年代", "label": "上位商品"},
     }
 
 

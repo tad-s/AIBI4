@@ -167,6 +167,14 @@ async def poc_drill_seq3(a: str, b: str, c: str, exclude: bool = False, distinct
     return {"category_seq": f"{a} → {b} → {c}", "excluded": exclude, "distinct": distinct, "rows": rows}
 
 
+@router.get("/poc/drill/age-items")
+async def poc_drill_age_items(age: str):
+    """年代(客層1ラベル)別・カテゴリ別の人気商品TOP5（2026-09のみ）。"""
+    df = await run_in_threadpool(base_table.build)
+    rows = await run_in_threadpool(drill.age_category_items, df, age)
+    return {"rows": rows}
+
+
 @router.get("/poc/drill/item-hours")
 async def poc_drill_item_hours(item: str, exclude: bool = False):
     """PoC①の商品の時間帯別 数量（exclude=上位3品除いた母集団）。"""

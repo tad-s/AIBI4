@@ -376,6 +376,11 @@ async function openDrill(drill, value) {
       $("drill-modal-title").textContent = `${value} の商品3連鎖内訳${paren}`;
       $("drill-modal-sub").textContent = `このカテゴリ3連鎖を構成する具体的な商品3連鎖（上位${d.rows.length}）${notes}。`;
       renderDrillRows(d.rows);
+    } else if (type === "age_items") {
+      const d = await api.drillPocAgeItems(value);
+      $("drill-modal-title").textContent = `${value} のカテゴリ別 人気商品TOP5（9月のみ）`;
+      $("drill-modal-sub").textContent = `${value}の来店で注文の多い商品を、カテゴリごとに上位5品（数量ベース・2026-09のみ）。`;
+      renderDrillRows(d.rows);
     }
   } catch (e) {
     drillModalBody.innerHTML = `<div style="padding:24px;color:var(--danger);">読み込みエラー: ${e.message}</div>`;

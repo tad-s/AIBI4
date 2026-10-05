@@ -126,6 +126,12 @@ export async function drillPocItemHours(item, exclude) {
   return r.json();
 }
 
+export async function drillPocAgeItems(age) {
+  const r = await fetch(`${BASE}/api/poc/drill/age-items?age=${encodeURIComponent(age)}`);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
 export async function overridePocCategory(item_name, category) {
   const r = await fetch(`${BASE}/api/poc/categories/override`, {
     method: "POST",
