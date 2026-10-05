@@ -69,10 +69,20 @@ _POC_CHAT_NOTE = (
 )
 
 
+def _period_label(df) -> str:
+    """読み込んだデータから実在する年月を算出（ordered_at, JST）。
+    6〜8月など欠落があり得るため min〜max ではなく実在月を列挙する。"""
+    oa = pd.to_datetime(df.get("ordered_at"), utc=True, errors="coerce")
+    if oa is None or oa.notna().sum() == 0:
+        return "-"
+    months = sorted(oa.dt.tz_convert("Asia/Tokyo").dt.strftime("%Y-%m").dropna().unique())
+    return "、".join(months) if months else "-"
+
+
 def _meta(df) -> dict:
     return {
         "store": "テング酒場 池袋東口店",
-        "period": "2026-03 〜 2026-05",
+        "period": _period_label(df),
         "visits": int(df["visit_id"].nunique()),
         "orders": int(df["order_id"].nunique()),
         "items": int(len(df)),
