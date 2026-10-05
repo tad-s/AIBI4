@@ -498,6 +498,135 @@ def _df_sig(df: pd.DataFrame):
     return (len(df), h)
 
 
+# ── 年代（客層1=customer_layer）別分析。年代は2026-09のみ収集のため「(9月のみ)」 ──
+# コード→年代ラベルは提供元の客層項目からの推定対応（00=未登録、01〜05=年代/その他）。
+_AGE_LABELS = {"00": "未登録", "01": "20〜30代", "02": "30〜40代",
+               "03": "40〜50代", "04": "50〜60代", "05": "その他"}
+_AGE_ORDER = ["01", "02", "03", "04", "05", "00"]   # 未登録は末尾
+_C_AGE = "#2e86c1"
+
+
+def _age_df(df):
+    """customer_layer を持つ行（＝年代収集済み＝9月分）だけ抽出し年代ラベルを付与。"""
+    if "customer_layer" not in df.columns:
+        return None
+    d = df[df["customer_layer"].notna()].copy()
+    if d.empty:
+        return None
+    d["_age"] = d["customer_layer"].astype(str).str.zfill(2)
+    d = d[d["_age"].isin(_AGE_LABELS)]
+    return d if not d.empty else None
+
+
+def _age_empty_card(title):
+    return {"title": title, "image_b64": "",
+            "insight": "年代（customer_layer）データがありません。年代は2026-09のみ収集のため、"
+                       "9月データが読み込まれている必要があります。",
+            "insights": [], "advice": [], "table": None}
+
+
+def analysis_age_overview(df):
+    """年代別の来店数・平均客単価・平均注文点数（9月のみ）。"""
+    title = "PoC⑧ 年代別 来店数・客単価・点数（9月のみ）"
+    d = _age_df(df)
+    if d is None:
+        return _age_empty_card(title)
+    d["_amt"] = pd.to_numeric(d["quantity"], errors="coerce") * pd.to_numeric(d["unit_price"], errors="coerce")
+    vis = d.groupby(["_age", "visit_id"]).agg(金額=("_amt", "sum"), 点数=("quantity", "sum")).reset_index()
+    g = vis.groupby("_age").agg(来店数=("visit_id", "nunique"),
+                                平均客単価=("金額", "mean"),
+                                平均点数=("点数", "mean"))
+    order = [c for c in _AGE_ORDER if c in g.index]
+    g = g.reindex(order)
+    labels = [_AGE_LABELS[c] for c in order]
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.6))
+    _hbar(axes[0], labels[::-1], g["来店数"].tolist()[::-1], _C_AGE, "年代別 来店数", "来店数")
+    _hbar(axes[1], labels[::-1], [round(x) for x in g["平均客単価"].tolist()][::-1],
+          _C_DRINK, "年代別 平均客単価", "円/来店")
+    fig.suptitle("PoC⑧ 年代別 来店・客単価（2026-09のみ）", fontsize=12, fontweight="bold")
+    fig.tight_layout()
+
+    known = g.drop(index=["00"], errors="ignore")
+    top_age = known["来店数"].idxmax() if len(known) else (order[0] if order else None)
+    top_spend = known["平均客単価"].idxmax() if len(known) else None
+    table = [{"年代": _AGE_LABELS[c], "来店数": int(g.loc[c, "来店数"]),
+              "平均客単価": round(float(g.loc[c, "平均客単価"])),
+              "平均点数": round(float(g.loc[c, "平均点数"]), 1)} for c in order]
+    return {
+        "title": title,
+        "image_b64": _b64(fig),
+        "insight": (f"【9月のみ】最多来店年代=**{_AGE_LABELS.get(top_age, '-')}**／"
+                    f"平均客単価最高=**{_AGE_LABELS.get(top_spend, '-')}**"
+                    f"（{round(float(known['平均客単価'].max())) if len(known) else 0:,}円）。"
+                    f"※年代は客層1コードからの推定対応・未登録(00)含む。"),
+        "insights": [
+            f"対象=2026-09の年代収集済み来店のみ（{vis['visit_id'].nunique():,}来店）",
+            "年代ラベルは客層1コード(00〜05)の推定対応（00=未登録）",
+        ],
+        "advice": [
+            "最多来店年代の嗜好に合わせた看板メニュー・レコメンドを優先",
+            "客単価の高い年代にはセット/高単価品の導線を強化",
+        ],
+        "table": table,
+    }
+
+
+def analysis_age_category(df):
+    """年代別のカテゴリ構成比（9月のみ）。年代ごとの注文傾向の違いを可視化。"""
+    title = "PoC⑨ 年代別 カテゴリ構成比（9月のみ）"
+    d = _age_df(df)
+    if d is None:
+        return _age_empty_card(title)
+    d = d[d["_age"] != "00"]   # 構成比は未登録を除外して年代差を見る
+    if d.empty:
+        return _age_empty_card(title)
+    piv = (d.groupby(["_age", "category"])["quantity"].sum().unstack(fill_value=0))
+    order = [c for c in _AGE_ORDER if c in piv.index]
+    piv = piv.reindex(order)
+    pct = piv.div(piv.sum(axis=1), axis=0) * 100
+    cats = list(pct.columns)
+
+    fig, ax = plt.subplots(figsize=(12, 4.8))
+    labels = [_AGE_LABELS[c] for c in order]
+    left = [0.0] * len(order)
+    cmap = plt.get_cmap("tab20")
+    for i, cat in enumerate(cats):
+        vals = pct[cat].tolist()
+        ax.barh(labels, vals, left=left, color=cmap(i % 20), label=str(cat))
+        left = [l + v for l, v in zip(left, vals)]
+    ax.set_xlabel("構成比（%）")
+    ax.set_xlim(0, 100)
+    ax.invert_yaxis()
+    ax.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=8)
+    ax.set_title("PoC⑨ 年代別 カテゴリ構成比（2026-09のみ・数量ベース）", fontsize=12, fontweight="bold")
+    fig.tight_layout()
+
+    # 各年代の最多カテゴリ
+    top_by_age = {c: pct.loc[c].idxmax() for c in order}
+    table = []
+    for c in order:
+        row = {"年代": _AGE_LABELS[c]}
+        row.update({str(cat): round(float(pct.loc[c, cat]), 1) for cat in cats})
+        table.append(row)
+    return {
+        "title": title,
+        "image_b64": _b64(fig),
+        "insight": ("【9月のみ】年代別のカテゴリ構成比（数量ベース・未登録除く）。"
+                    + "／".join(f"{_AGE_LABELS[c]}→{top_by_age[c]}" for c in order[:3])
+                    + " が各年代の最多カテゴリ。※年代は客層1コードからの推定対応。"),
+        "insights": [
+            "各年代で最も注文の多いカテゴリを比較（数量構成比）",
+            "年代は客層1コード(01〜05)の推定対応・未登録(00)は除外",
+        ],
+        "advice": [
+            "年代で構成比が高いカテゴリをその年代向けレコメンドの核にする",
+            "年代差の大きいカテゴリはターゲット年代の来店時間帯に合わせて訴求",
+        ],
+        "table": table,
+    }
+
+
 def run_poc_analyses(df: pd.DataFrame) -> list[dict]:
     sig = _df_sig(df)
     if _RESULT_CACHE.get("sig") == sig and _RESULT_CACHE.get("results") is not None:
@@ -511,6 +640,9 @@ def run_poc_analyses(df: pd.DataFrame) -> list[dict]:
     for fn in fns:
         out.append(_run_one(fn, df))                       # 通常版
         out.append(_excluded_variant(_run_one(fn, df_ex)))  # 上位3品除外版
+    # 年代別カード（9月のみ・上位3品除外版は作らない）
+    out.append(_run_one(analysis_age_overview, df))
+    out.append(_run_one(analysis_age_category, df))
     _RESULT_CACHE["sig"] = sig
     _RESULT_CACHE["results"] = out
     return out
